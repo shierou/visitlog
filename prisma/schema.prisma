@@ -1,0 +1,88 @@
+// Neon Postgres. Vercel Marketplace 연동 시 DATABASE_URL / DIRECT_URL 자동 주입
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")   // Neon 풀링 엔드포인트 (서버리스 런타임용)
+  directUrl = env("DIRECT_URL")     // 직접 연결 (마이그레이션 전용)
+}
+
+model List {
+  id        String   @id @default(cuid())
+  ownerId   String   @default("local")
+  name      String
+  color     String?
+  createdAt DateTime @default(now())
+  places    Place[]
+}
+
+model Place {
+  id       String  @id @default(cuid())
+  ownerId  String  @default("local")
+  name     String
+  memo     String?
+  category String?
+
+  // 위치 (Track 1에서는 비워둬도 됨 / Track 2에서 자동 채움)
+  address String?
+  lat     Float?
+  lng     Float?
+  mapId   String? // 나중에 카카오 place_id
+
+  // 출처 (Track 2 대비: 'manual' | 'ig_share' | 'ig_import')
+  source    String  @default("manual")
+  sourceUrl String?
+
+  status String @default("wishlist") // wishlist | visited | skipped
+
+  listId String?
+  list   List?   @relation(fields: [listId], references: [id], onDelete: SetNull)
+
+  visits Visit[]
+  media  Media[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId, status])
+}
+
+model Visit {
+  id      String @id @default(cuid())
+  placeId String
+  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+
+  visitedOn  DateTime
+  rating     Int? // 1~5
+  revisit    String? // yes | maybe | no
+  note       String?
+  spent      Int?
+  companions String? // 쉼표 구분 (Postgres 이전 시 text[] 로 승격 가능)
+
+  media     Media[]
+  createdAt DateTime @default(now())
+
+  @@index([placeId, visitedOn])
+}
+
+model Media {
+  id      String @id @default(cuid())
+  placeId String
+  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  visitId String?
+  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
+
+  kind String // reference(인스타 스크린샷) | visit(방문 사진)
+  path String // storage 키. 로컬=상대경로, 클라우드=오브젝트 키
+
+  // EXIF에서 추출
+  takenAt DateTime?
+  lat     Float?
+  lng     Float?
+
+  createdAt DateTime @default(now())
+
+  @@index([placeId])
+}
