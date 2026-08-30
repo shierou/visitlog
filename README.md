@@ -44,9 +44,26 @@ Vercel → Settings → Environment Variables (Production/Preview/Development �
 | 이름 | 값 |
 |---|---|
 | `APP_PASSWORD` | 앱에 들어갈 때 입력할 공유 비밀번호 |
-| `AUTH_SECRET` | `openssl rand -hex 32` 결과 |
+| `AUTH_SECRET` | 64자리 hex 난수 (생성법은 아래) |
 
 **둘 중 하나라도 없으면 앱 전체가 503으로 잠긴다.** (열린 채 배포되는 것보다 안전한 쪽으로 실패)
+
+`AUTH_SECRET` 생성 — 셋 중 아무거나:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"   # cmd/PowerShell/Bash 어디서나
+openssl rand -hex 32                                                        # Git Bash 전용
+```
+
+```powershell
+# PowerShell 순정 (설치 불필요)
+$b = New-Object byte[] 32
+[System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+($b | ForEach-Object { $_.ToString('x2') }) -join ''
+```
+
+> `openssl`은 Git Bash 안에만 있다 (`/mingw64/bin/openssl`).
+> cmd·PowerShell의 PATH에는 없으므로 거기서는 node 또는 PowerShell 방식을 쓴다.
 
 ### 6. Import & Deploy
 
