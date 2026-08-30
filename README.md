@@ -24,28 +24,34 @@ git remote add origin https://github.com/<계정>/visitlog.git
 git push -u origin main
 ```
 
-### 3. Neon 생성 (Postgres)
+### 3. Neon 생성 (Postgres) — neon.com 에서 직접
 
-Vercel → **Storage → Create Database → Neon** (무료).
+**Vercel 의 Storage/Marketplace 경로는 쓰지 않는다.** 마켓플레이스는 약관상
+무료 플랜이라도 결제 수단 등록을 요구한다. neon.com 직접 가입은 카드가 필요 없고
+받는 것은 똑같다.
 
-**Region 은 반드시 `Singapore (Sin1)` 로 고른다.** `vercel.json` 에서 함수 지역을
-`sin1` 으로 고정해두었기 때문이다. 둘이 어긋나면 쿼리마다 대륙을 건너므로
-아무것도 안 바꾼 것보다 크게 느려진다.
+1. [neon.com](https://neon.com) 가입 (GitHub 로그인 가능, 카드 불필요)
+2. Create project
+   - **Region: `AWS Asia Pacific 1 (Singapore)`**
+   - `vercel.json` 이 함수를 `sin1` 로 고정해두었으므로 반드시 맞춘다.
+     어긋나면 쿼리마다 대륙을 건너 오히려 크게 느려진다.
 
-한국 기준 대략:
+     | 함수 | DB | 체감 |
+     |---|---|---|
+     | iad1 | iad1 | ~200ms |
+     | iad1 | sin1 | ~900ms ← 최악 |
+     | sin1 | sin1 | ~85ms ← 이 조합 |
 
-| 함수 | DB | 체감 |
-|---|---|---|
-| iad1 | iad1 | ~200ms |
-| iad1 | sin1 | ~900ms ← 최악 |
-| sin1 | sin1 | ~85ms ← 이 조합 |
+3. 대시보드 **Connection string** 위젯에서 두 가지를 복사한다.
+   - **Pooled** (호스트에 `-pooler` 포함) → `DATABASE_URL`
+   - **Direct / unpooled** (`-pooler` 없음) → `DIRECT_URL`
 
-**Auth 토글은 끈다.** 이 앱은 자체 비밀번호 게이트를 쓰므로 Neon Auth 가 만드는
-스키마가 필요 없다.
-프로젝트에 연결하면 `DATABASE_URL`(풀링)과 `DIRECT_URL`(직접)이 자동 주입된다.
+   > 풀러 주소에 붙여야 하는 `pgbouncer=true&connection_limit=1` 는
+   > `src/lib/db.ts` 가 자동으로 붙인다. 직접 넣지 않아도 된다.
+   > 안 붙이면 런타임에 `prepared statement s0 already exists` 로 터진다.
 
-> 서버리스에서는 이 둘을 반드시 나눠 써야 한다.
-> 런타임은 풀링으로, 마이그레이션은 직접 연결로 간다. 하나만 쓰면 커넥션이 고갈된다.
+4. Vercel → Settings → Environment Variables 에 두 개를 추가.
+   Environments 는 Production·Preview·Development 전부 체크.
 
 ### 4. Blob 스토어 생성 (사진)
 
