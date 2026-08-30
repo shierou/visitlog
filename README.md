@@ -27,6 +27,21 @@ git push -u origin main
 ### 3. Neon 생성 (Postgres)
 
 Vercel → **Storage → Create Database → Neon** (무료).
+
+**Region 은 반드시 `Singapore (Sin1)` 로 고른다.** `vercel.json` 에서 함수 지역을
+`sin1` 으로 고정해두었기 때문이다. 둘이 어긋나면 쿼리마다 대륙을 건너므로
+아무것도 안 바꾼 것보다 크게 느려진다.
+
+한국 기준 대략:
+
+| 함수 | DB | 체감 |
+|---|---|---|
+| iad1 | iad1 | ~200ms |
+| iad1 | sin1 | ~900ms ← 최악 |
+| sin1 | sin1 | ~85ms ← 이 조합 |
+
+**Auth 토글은 끈다.** 이 앱은 자체 비밀번호 게이트를 쓰므로 Neon Auth 가 만드는
+스키마가 필요 없다.
 프로젝트에 연결하면 `DATABASE_URL`(풀링)과 `DIRECT_URL`(직접)이 자동 주입된다.
 
 > 서버리스에서는 이 둘을 반드시 나눠 써야 한다.
