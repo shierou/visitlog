@@ -51,10 +51,25 @@ Vercel → Settings → Environment Variables (Production/Preview/Development �
 ### 6. Import & Deploy
 
 Vercel → **Add New → Project** → 저장소 선택 → Deploy.
-빌드 중 `prisma migrate deploy`가 테이블을 만들고, 끝나면 바로 쓸 수 있다.
 
-> 3~5번을 먼저 끝내고 6번을 하면 실패 없이 한 번에 뜬다.
-> 순서를 바꾸면 첫 배포가 실패하는데, 원인을 고친 뒤 Redeploy 하면 된다.
+**첫 배포는 실패한다. 정상이다.** 스토어를 만들어만 두고 프로젝트에 아직 연결하지 않았으므로
+`DATABASE_URL`이 주입되지 않은 상태다.
+
+### 7. 스토어 연결 후 Redeploy
+
+Vercel 프로젝트 → **Storage** 탭 → 3~4번에서 만든 Neon과 Blob을 **Connect**.
+환경변수가 자동 주입된다. → **Deployments → 최신 항목 → Redeploy**.
+
+이번 빌드에서 `prisma migrate deploy`가 테이블을 만들고 배포가 끝난다.
+
+> 실패를 아예 안 보고 싶다면: 3번에서 Neon 연결 문자열을 복사해
+> 6번 Import 화면의 Environment Variables에 `DATABASE_URL`/`DIRECT_URL`로 직접 넣으면 된다.
+> 손이 더 가므로 권하지는 않는다.
+
+### 8. 폰에 설치
+
+배포된 `https://<프로젝트>.vercel.app` 을 폰 브라우저로 열고
+비밀번호 입력 → **홈 화면에 추가**.
 
 ## 로컬 개발
 
