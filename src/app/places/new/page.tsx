@@ -4,14 +4,16 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
-
-const CATEGORIES = ['맛집', '카페', '술집', '베이커리', '전시', '숙소', '기타'];
+import { CategoryChips, RegionSelect, PriorityChips } from '@/components/MetaFields';
+import { PRIORITY } from '@/lib/taxonomy';
 
 export default function NewPlace() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [memo, setMemo] = useState('');
   const [category, setCategory] = useState('');
+  const [region, setRegion] = useState('');
+  const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
   const [sourceUrl, setSourceUrl] = useState('');
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
@@ -24,7 +26,7 @@ export default function NewPlace() {
       const res = await fetch('/api/places', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, memo, category, sourceUrl }),
+        body: JSON.stringify({ name, memo, category, region, priority, sourceUrl }),
       });
       if (!res.ok) throw new Error(await res.text());
       const place = await res.json();
@@ -65,25 +67,11 @@ export default function NewPlace() {
           />
         </div>
 
-        <div>
-          <label className="text-sm font-medium">종류</label>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c}
-                type="button"
-                onClick={() => setCategory(category === c ? '' : c)}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  category === c
-                    ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
-                    : 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400'
-                }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-        </div>
+        <RegionSelect value={region} onChange={setRegion} />
+
+        <CategoryChips value={category} onChange={setCategory} />
+
+        <PriorityChips value={priority} onChange={setPriority} />
 
         <div>
           <label className="text-sm font-medium">메모</label>

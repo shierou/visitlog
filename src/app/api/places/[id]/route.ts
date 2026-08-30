@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { deleteFile } from '@/lib/storage';
+import { normalizePriority } from '@/lib/taxonomy';
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,9 +23,20 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
   const body = await req.json();
   const data: Record<string, unknown> = {};
-  for (const k of ['name', 'memo', 'category', 'address', 'sourceUrl', 'status', 'listId'] as const) {
+  for (const k of [
+    'name',
+    'memo',
+    'category',
+    'region',
+    'address',
+    'sourceUrl',
+    'status',
+    'listId',
+  ] as const) {
     if (k in body) data[k] = body[k] === '' ? null : body[k];
   }
+  // priority 는 NOT NULL 이므로 빈 문자열을 null 로 떨어뜨리는 위 루프에서 제외한다.
+  if ('priority' in body) data.priority = normalizePriority(body.priority);
   const place = await db.place.update({ where: { id }, data });
   return NextResponse.json(place);
 }

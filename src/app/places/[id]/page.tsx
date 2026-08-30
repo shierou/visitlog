@@ -5,6 +5,8 @@ import { publicUrl } from '@/lib/storage';
 import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
 import ReferencePhotos from '@/components/ReferencePhotos';
 import { DeletePlaceButton, DeleteVisitButton } from '@/components/DangerActions';
+import PlaceMetaEditor from '@/components/PlaceMetaEditor';
+import { priorityMeta } from '@/lib/taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,6 +24,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
   const refs = place.media.filter((m) => m.kind === 'reference');
   const urls = Object.fromEntries(place.media.map((m) => [m.id, publicUrl(m.path)]));
   const firstVisit = place.visits.at(-1);
+  const pr = priorityMeta(place.priority);
 
   return (
     <>
@@ -33,8 +36,13 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
       </header>
 
       <div className="px-4 pt-5">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{place.name}</h1>
+          {pr.badge && (
+            <span className={`rounded px-2 py-0.5 text-xs font-semibold ${pr.className}`}>
+              {pr.badge}
+            </span>
+          )}
           {place.category && (
             <span className="rounded bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
               {place.category}
@@ -43,6 +51,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
         </div>
 
         <p className="mt-1 text-xs text-neutral-400">
+          {place.region && `📍 ${place.region} · `}
           {fmtDate(place.createdAt)} 저장
           {firstVisit && ` · ${daysBetween(place.createdAt, firstVisit.visitedOn)}일 만에 방문`}
         </p>
@@ -60,6 +69,15 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
           </a>
         )}
       </div>
+
+      <PlaceMetaEditor
+        placeId={place.id}
+        initial={{
+          region: place.region ?? '',
+          category: place.category ?? '',
+          priority: place.priority,
+        }}
+      />
 
       <ReferencePhotos placeId={place.id} items={refs} urls={urls} />
 

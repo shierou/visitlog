@@ -2,27 +2,44 @@ import Link from 'next/link';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { publicUrl } from '@/lib/storage';
 import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
+import { priorityMeta, normalizePriority } from '@/lib/taxonomy';
+import PlaceFilters from '@/components/PlaceFilters';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; q?: string }>;
+  searchParams: Promise<{
+    tab?: string;
+    q?: string;
+    region?: string;
+    category?: string;
+    priority?: string;
+  }>;
 }) {
-  const { tab = 'wishlist', q = '' } = await searchParams;
+  const { tab = 'wishlist', q = '', region = '', category = '', priority = '' } =
+    await searchParams;
 
   const places = await db.place.findMany({
     where: {
       ownerId: CURRENT_OWNER,
       status: tab === 'visited' ? 'visited' : 'wishlist',
       ...(q ? { name: { contains: q } } : {}),
+      ...(region ? { region } : {}),
+      ...(category ? { category } : {}),
+      ...(priority ? { priority: normalizePriority(priority) } : {}),
     },
     include: {
       media: { orderBy: { createdAt: 'asc' }, take: 1 },
       visits: { orderBy: { visitedOn: 'desc' }, take: 1 },
     },
-    orderBy: tab === 'visited' ? { updatedAt: 'desc' } : { createdAt: 'desc' },
+    // 가고 싶은 곳은 "뭘 먼저 갈까"가 관심사라 우선순위가 앞선다.
+    // 다녀온 곳은 최근 기록순이 자연스럽다.
+    orderBy:
+      tab === 'visited'
+        ? [{ updatedAt: 'desc' }]
+        : [{ priority: 'desc' }, { createdAt: 'desc' }],
   });
 
   const [wishCount, visitedCount] = await Promise.all([
@@ -47,7 +64,13 @@ export default async function Home({
           ].map((t) => (
             <Link
               key={t.key}
-              href={`/?tab=${t.key}`}
+              href={`/?${new URLSearchParams({
+                ...(q && { q }),
+                ...(region && { region }),
+                ...(category && { category }),
+                ...(priority && { priority }),
+                tab: t.key,
+              })}`}
               className={`rounded-t-lg px-3 py-2 text-sm font-medium ${
                 tab === t.key
                   ? 'border-b-2 border-neutral-900 text-neutral-900 dark:border-white dark:text-white'
@@ -60,20 +83,13 @@ export default async function Home({
         </nav>
       </header>
 
-      <form className="px-4 py-3" action="/">
-        <input type="hidden" name="tab" value={tab} />
-        <input
-          name="q"
-          defaultValue={q}
-          placeholder="이름으로 검색"
-          className="w-full rounded-xl bg-neutral-100 px-4 py-2.5 text-sm outline-none dark:bg-neutral-800"
-        />
-      </form>
+      <PlaceFilters filters={{ tab, q, region, category, priority }} />
 
       <ul className="space-y-2 px-4">
         {places.map((p) => {
           const thumb = p.media[0];
           const last = p.visits[0];
+          const pr = priorityMeta(p.priority);
           return (
             <li key={p.id}>
               <Link
@@ -95,6 +111,13 @@ export default async function Home({
 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
+                    {pr.badge && (
+                      <span
+                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${pr.className}`}
+                      >
+                        {pr.badge}
+                      </span>
+                    )}
                     <span className="truncate font-semibold">{p.name}</span>
                     {p.category && (
                       <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
@@ -102,6 +125,10 @@ export default async function Home({
                       </span>
                     )}
                   </div>
+
+                  {p.region && (
+                    <p className="mt-0.5 text-xs text-neutral-400">📍 {p.region}</p>
+                  )}
 
                   {p.memo && (
                     <p className="mt-0.5 truncate text-xs text-neutral-500">{p.memo}</p>
@@ -126,7 +153,11 @@ export default async function Home({
 
         {places.length === 0 && (
           <li className="py-20 text-center text-sm text-neutral-400">
-            {tab === 'visited' ? '아직 다녀온 곳이 없어요' : '＋ 를 눌러 가고 싶은 곳을 추가해보세요'}
+            {q || region || category || priority
+              ? '조건에 맞는 곳이 없어요'
+              : tab === 'visited'
+                ? '아직 다녀온 곳이 없어요'
+                : '＋ 를 눌러 가고 싶은 곳을 추가해보세요'}
           </li>
         )}
       </ul>

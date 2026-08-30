@@ -145,6 +145,12 @@ prisma/schema.prisma  List / Place / Visit / Media
 
 - `Place.status` = `wishlist` | `visited` — 방문 기록이 생기면 `visited`,
   마지막 기록을 지우면 `wishlist`로 자동 복귀
+- `Place.region` = 상권 단위 지역 (`성수·서울숲`, `연남·망원` …).
+  행정구역이 아니다. "성동구"로 묶으면 성수와 왕십리가 한 칸에 섞인다.
+- `Place.priority` = `2`(꼭 가야 해) | `1`(보통) | `0`(천천히).
+  정렬 키라서 정수다. 가고 싶은 곳 목록의 기본 정렬이 `priority desc, createdAt desc`
+- 지역·종류·우선순위 프리셋은 전부 `src/lib/taxonomy.ts` 한 곳에 있다.
+  항목을 지워도 기존 데이터는 남고 필터 선택지에서만 사라진다.
 - `Visit`은 Place와 1:N — 재방문이 쌓인다
 - `Media.kind` = `reference`(인스타 스크린샷) | `visit`(방문 사진)
 - `Media.path` = Blob이면 전체 URL, 로컬이면 상대 키. `publicUrl()`이 구분 처리
