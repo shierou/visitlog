@@ -63,7 +63,21 @@ export async function POST(req: NextRequest) {
 
   const scan = scanInstagramWebhook(payload);
 
-  const expectedAccountId = process.env.INSTAGRAM_ACCOUNT_ID?.trim();
+  // 계정 ID 는 항상 숫자다. 액세스 토큰(IGAA…)이나 사용자명을 넣으면 도착한 DM 이
+  // 전부 필터에 걸려 사라지므로, 형식이 아니면 필터를 끄고 크게 남긴다.
+  // 잘못된 필터로 100% 유실하는 것보다 필터를 안 거는 쪽이 낫다.
+  const configuredAccountId = process.env.INSTAGRAM_ACCOUNT_ID?.trim();
+  const accountIdIsValid = !configuredAccountId || /^\d+$/u.test(configuredAccountId);
+  const expectedAccountId = accountIdIsValid ? configuredAccountId : undefined;
+
+  if (!accountIdIsValid) {
+    console.error(
+      '[instagram-webhook] INSTAGRAM_ACCOUNT_ID 형식이 잘못되어 계정 필터를 건너뜁니다. ' +
+        '숫자로 된 계정 ID 여야 합니다(아래 payloadAccountIds 참고).',
+      { length: configuredAccountId?.length, startsWith: configuredAccountId?.slice(0, 4) }
+    );
+  }
+
   const imports = scan.imports.filter(
     (item) => !expectedAccountId || item.accountId === expectedAccountId
   );
@@ -83,6 +97,7 @@ export async function POST(req: NextRequest) {
     // 실제 페이로드로만 확인할 수 있어서, INSTAGRAM_ACCOUNT_ID 를 정할 근거가 된다.
     payloadAccountIds: scan.accountIds,
     ...(expectedAccountId ? { expectedAccountId } : {}),
+    ...(accountIdIsValid ? {} : { accountFilterSkipped: 'INSTAGRAM_ACCOUNT_ID_invalid' }),
   };
 
   if (imports.length === 0) {
