@@ -22,3 +22,15 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   });
   return NextResponse.json(updated);
 }
+
+export async function DELETE(_req: NextRequest, { params }: Context) {
+  const { id } = await params;
+  const result = await db.instagramImport.deleteMany({
+    where: { id, ownerId: CURRENT_OWNER },
+  });
+
+  if (result.count === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+  return NextResponse.json({ ok: true });
+}
