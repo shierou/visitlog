@@ -54,8 +54,12 @@ async function main() {
 
   console.log(`\n조회 대상: ${BASE}\n`);
 
-  // 1) 토큰이 어느 계정 것인지 — INSTAGRAM_ACCOUNT_ID 대조에 쓴다.
-  const me = await call('/me?fields=id,username,account_type');
+  // 1) 토큰이 어느 계정 것인지.
+  //    id 는 앱 스코프 ID, user_id 는 대시보드에 보이는 프로페셔널 계정 ID(17841…) 로
+  //    서로 다르다. 어느 쪽이 웹훅 entry.id 로 오는지는 실제 페이로드로만 알 수 있어서
+  //    둘 다 찍어준다.
+  let me = await call('/me?fields=id,user_id,username,account_type');
+  if (!me.ok) me = await call('/me?fields=id,username,account_type');
   if (!me.ok) {
     console.error(`[1/2] 계정 조회 실패 (HTTP ${me.status})`);
     console.error(me.text.slice(0, 500));
@@ -66,20 +70,26 @@ async function main() {
     );
     return 1;
   }
-  console.log(`[1/2] 계정  : @${me.json.username}  (id: ${me.json.id}, ${me.json.account_type})`);
+  const known = [me.json.id, me.json.user_id].filter(Boolean);
+  console.log(`[1/2] 계정  : @${me.json.username}  (${me.json.account_type})`);
+  console.log(`        앱 스코프 ID       : ${me.json.id}`);
+  console.log(`        프로페셔널 계정 ID : ${me.json.user_id ?? '(조회 불가)'}`);
 
-  if (expectedAccountId && expectedAccountId !== me.json.id) {
+  if (expectedAccountId && !known.includes(expectedAccountId)) {
     console.log(
-      '\n  ⚠ INSTAGRAM_ACCOUNT_ID 불일치\n' +
+      '\n  ⚠ INSTAGRAM_ACCOUNT_ID 가 위 두 ID 중 어느 것과도 다릅니다.\n' +
         `      설정된 값 : ${expectedAccountId}\n` +
-        `      실제 계정 : ${me.json.id}\n` +
-        '    Vercel 환경변수를 실제 계정 ID 로 바꾸고 Redeploy 하세요.\n' +
-        '    (또는 이 변수를 지우면 계정 필터 없이 전부 수집합니다.)'
+        '    이 상태면 모든 DM 이 걸러집니다. 변수를 지우거나(필터 비활성),\n' +
+        '    실제 웹훅 로그의 payloadAccountIds 값으로 교체하세요.'
     );
   } else if (expectedAccountId) {
-    console.log('        INSTAGRAM_ACCOUNT_ID 와 일치합니다.');
+    console.log('        INSTAGRAM_ACCOUNT_ID 가 위 ID 중 하나와 일치합니다.');
   } else {
-    console.log('        참고: 위 id 가 INSTAGRAM_ACCOUNT_ID 에 넣을 값입니다.');
+    console.log(
+      '\n        INSTAGRAM_ACCOUNT_ID 는 미설정 상태입니다(계정 필터 비활성).\n' +
+        '        굳이 설정할 필요는 없다. 설정하려면 위 두 ID 중 아무거나 찍지 말고,\n' +
+        '        실제 웹훅 로그의 payloadAccountIds 에 찍힌 값을 그대로 쓰세요.'
+    );
   }
 
   // 2) 이 계정이 앱에 messages 필드로 구독돼 있는지 — 빠지면 웹훅이 아예 안 온다.

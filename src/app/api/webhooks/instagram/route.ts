@@ -79,9 +79,10 @@ export async function POST(req: NextRequest) {
     skipped: scan.skipped,
     matched: scan.imports.length,
     droppedByAccountFilter,
-    ...(droppedByAccountFilter > 0
-      ? { expectedAccountId, payloadAccountIds: scan.accountIds }
-      : {}),
+    // 항상 남긴다. Meta 가 entry.id 에 어떤 ID 체계를 쓰는지(프로페셔널 계정 ID / 앱 스코프 ID)
+    // 실제 페이로드로만 확인할 수 있어서, INSTAGRAM_ACCOUNT_ID 를 정할 근거가 된다.
+    payloadAccountIds: scan.accountIds,
+    ...(expectedAccountId ? { expectedAccountId } : {}),
   };
 
   if (imports.length === 0) {
