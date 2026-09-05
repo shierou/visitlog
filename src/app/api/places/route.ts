@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { normalizePriority } from '@/lib/taxonomy';
+import { fetchInstagramThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
+import { saveFile } from '@/lib/storage';
 
 export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams;
@@ -68,5 +70,22 @@ export async function POST(req: NextRequest) {
 
     return created;
   });
+
+  // 인스타 링크가 있으면 대표 이미지를 한 장 붙여준다.
+  // 실패해도 장소는 이미 저장됐으므로 응답을 막지 않는다.
+  if (place.sourceUrl && isInstagramPostUrl(place.sourceUrl)) {
+    try {
+      const thumbnail = await fetchInstagramThumbnail(place.sourceUrl);
+      if (thumbnail) {
+        const path = await saveFile(thumbnail);
+        await db.media.create({
+          data: { placeId: place.id, kind: 'reference', path },
+        });
+      }
+    } catch (error) {
+      console.warn('[places] 인스타 대표 이미지 저장 실패', { placeId: place.id }, error);
+    }
+  }
+
   return NextResponse.json(place, { status: 201 });
 }

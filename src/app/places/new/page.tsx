@@ -6,14 +6,20 @@ import Link from 'next/link';
 import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
 import { CategoryChips, RegionSelect, PriorityChips } from '@/components/MetaFields';
 import { PRIORITY } from '@/lib/taxonomy';
+import { autofillFromCaption } from '@/lib/autofill';
 
 function NewPlaceForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [name, setName] = useState('');
-  const [memo, setMemo] = useState(() => searchParams.get('memo') ?? '');
-  const [category, setCategory] = useState('');
-  const [region, setRegion] = useState('');
+
+  // DM 캡션에서 이름·종류·지역을 추측해 초기값으로 깐다. 전부 그냥 고치면 되는 값이다.
+  const initialMemo = searchParams.get('memo') ?? '';
+  const [guessed] = useState(() => autofillFromCaption(initialMemo));
+
+  const [name, setName] = useState(guessed.name);
+  const [memo, setMemo] = useState(initialMemo);
+  const [category, setCategory] = useState(guessed.category);
+  const [region, setRegion] = useState(guessed.region);
   const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
   const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
   const [shots, setShots] = useState<Staged[]>([]);
@@ -96,7 +102,11 @@ function NewPlaceForm() {
 
         <PhotoPicker
           label="인스타 스크린샷"
-          hint="여러 장 가능"
+          hint={
+            sourceUrl.includes('instagram.com')
+              ? '저장하면 대표 이미지가 자동으로 들어가요'
+              : '여러 장 가능'
+          }
           staged={shots}
           onChange={setShots}
         />
