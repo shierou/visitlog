@@ -169,6 +169,33 @@ prisma/schema.prisma  List / Place / Visit / Media
 
 ---
 
+## Instagram DM 수집
+
+수집용 Instagram 프로페셔널 계정으로 게시물이나 릴스를 DM 공유하면
+`/api/webhooks/instagram`이 URL을 받아 `Instagram 수집함`에 저장한다.
+일반 텍스트 메시지와 앱이 보낸 echo 이벤트는 저장하지 않으며, Meta 재전송은
+메시지 ID와 URL 조합으로 중복 제거한다.
+
+Vercel에 아래 환경변수를 Production 환경으로 추가한다.
+
+| 이름 | 값 |
+|---|---|
+| `INSTAGRAM_ACCOUNT_ID` | Meta 대시보드의 수집용 Instagram 계정 ID |
+| `INSTAGRAM_APP_SECRET` | Instagram 앱 시크릿 코드 |
+| `INSTAGRAM_WEBHOOK_VERIFY_TOKEN` | 직접 생성한 긴 임의 문자열 |
+
+Meta Webhook 설정:
+
+- 콜백 URL: `https://<배포 도메인>/api/webhooks/instagram`
+- 인증 토큰: `INSTAGRAM_WEBHOOK_VERIFY_TOKEN`과 동일한 값
+- 클라이언트 인증서 첨부: 끔
+- 계정의 Webhook 구독: 콜백 검증이 끝난 뒤 켬
+
+액세스 토큰은 현재 수신 전용 구현에서 서버가 Graph API를 호출하지 않으므로
+Vercel에 저장하지 않는다. Meta 대시보드의 계정 연결과 구독에만 사용한다.
+
+---
+
 ## 알려진 한계
 
 - **비밀번호를 아는 사람은 모두 같은 데이터를 본다.** 사용자 구분이 없다.

@@ -5,8 +5,8 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")   // Neon 풀링 엔드포인트 (서버리스 런타임용)
-  directUrl = env("DIRECT_URL")     // 직접 연결 (마이그레이션 전용)
+  url       = env("DATABASE_URL") // Neon 풀링 엔드포인트 (서버리스 런타임용)
+  directUrl = env("DIRECT_URL") // 직접 연결 (마이그레이션 전용)
 }
 
 model List {
@@ -46,8 +46,9 @@ model Place {
   listId String?
   list   List?   @relation(fields: [listId], references: [id], onDelete: SetNull)
 
-  visits Visit[]
-  media  Media[]
+  visits           Visit[]
+  media            Media[]
+  instagramImports InstagramImport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -55,6 +56,30 @@ model Place {
   @@index([ownerId, status])
   @@index([ownerId, status, priority])
   @@index([ownerId, region])
+}
+
+// Instagram DM으로 공유된 게시물을 장소로 정리하기 전까지 보관하는 수집함.
+// Meta가 같은 Webhook을 재전송할 수 있으므로 messageId + sourceUrl 조합으로 중복을 막는다.
+model InstagramImport {
+  id          String   @id @default(cuid())
+  ownerId     String   @default("local")
+  messageId   String
+  senderId    String?
+  recipientId String?
+  sourceUrl   String
+  messageText String?
+  status      String   @default("pending") // pending | converted | ignored
+  receivedAt  DateTime
+
+  placeId String?
+  place   Place?  @relation(fields: [placeId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([messageId, sourceUrl])
+  @@index([ownerId, status, receivedAt])
+  @@index([placeId])
 }
 
 model Visit {
@@ -76,11 +101,11 @@ model Visit {
 }
 
 model Media {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   placeId String
-  place   Place  @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  place   Place   @relation(fields: [placeId], references: [id], onDelete: Cascade)
   visitId String?
-  visit   Visit? @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visit   Visit?  @relation(fields: [visitId], references: [id], onDelete: Cascade)
 
   kind String // reference(인스타 스크린샷) | visit(방문 사진)
   path String // storage 키. 로컬=상대경로, 클라우드=오브젝트 키

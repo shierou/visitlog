@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE, expectedToken, safeEqual } from '@/lib/auth';
 
 export async function middleware(req: NextRequest) {
+  // Meta는 로그인 쿠키 대신 Webhook 서명을 보내며, 라우트에서 이를 검증한다.
+  if (req.nextUrl.pathname === '/api/webhooks/instagram') {
+    return NextResponse.next();
+  }
+
   const token = await expectedToken();
 
   // APP_PASSWORD / AUTH_SECRET 미설정 = 설정 사고. 열어두지 않고 막는다.
@@ -22,6 +27,6 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // /login, /api/login, 정적 자산만 통과시키고 나머지 전부 보호
+  // /login, /api/login, 정적 자산만 matcher에서 제외한다. Webhook은 위에서 정확한 경로만 통과.
   matcher: ['/((?!login|api/login|_next/static|_next/image|favicon.ico).*)'],
 };

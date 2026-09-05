@@ -42,9 +42,10 @@ export default async function Home({
         : [{ priority: 'desc' }, { createdAt: 'desc' }],
   });
 
-  const [wishCount, visitedCount] = await Promise.all([
+  const [wishCount, visitedCount, instagramCount] = await Promise.all([
     db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'wishlist' } }),
     db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'visited' } }),
+    db.instagramImport.count({ where: { ownerId: CURRENT_OWNER, status: 'pending' } }),
   ]);
 
   return (
@@ -80,6 +81,12 @@ export default async function Home({
               {t.label}
             </Link>
           ))}
+          <Link
+            href="/instagram"
+            className="rounded-t-lg px-3 py-2 text-sm font-medium text-neutral-400"
+          >
+            Instagram {instagramCount}
+          </Link>
         </nav>
       </header>
 

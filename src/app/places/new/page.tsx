@@ -1,20 +1,21 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
 import { CategoryChips, RegionSelect, PriorityChips } from '@/components/MetaFields';
 import { PRIORITY } from '@/lib/taxonomy';
 
-export default function NewPlace() {
+function NewPlaceForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [name, setName] = useState('');
-  const [memo, setMemo] = useState('');
+  const [memo, setMemo] = useState(() => searchParams.get('memo') ?? '');
   const [category, setCategory] = useState('');
   const [region, setRegion] = useState('');
   const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
-  const [sourceUrl, setSourceUrl] = useState('');
+  const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -26,7 +27,16 @@ export default function NewPlace() {
       const res = await fetch('/api/places', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, memo, category, region, priority, sourceUrl }),
+        body: JSON.stringify({
+          name,
+          memo,
+          category,
+          region,
+          priority,
+          sourceUrl,
+          source: searchParams.get('source'),
+          instagramImportId: searchParams.get('importId'),
+        }),
       });
       if (!res.ok) throw new Error(await res.text());
       const place = await res.json();
@@ -103,5 +113,13 @@ export default function NewPlace() {
         </div>
       </div>
     </form>
+  );
+}
+
+export default function NewPlace() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-neutral-400">불러오는 중…</div>}>
+      <NewPlaceForm />
+    </Suspense>
   );
 }

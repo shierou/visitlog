@@ -12,6 +12,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "studio": "prisma studio",
+    "test": "node --test tests/*.test.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
