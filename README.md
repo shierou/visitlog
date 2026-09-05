@@ -194,6 +194,32 @@ Meta Webhook 설정:
 액세스 토큰은 현재 수신 전용 구현에서 서버가 Graph API를 호출하지 않으므로
 Vercel에 저장하지 않는다. Meta 대시보드의 계정 연결과 구독에만 사용한다.
 
+### DM을 보냈는데 수집함이 비어 있을 때
+
+웹훅은 어떤 경우에도 200을 돌려주므로(Meta가 구독을 꺼버리지 않게) 상태 코드만으로는
+원인을 알 수 없다. 대신 매 요청마다 Vercel 런타임 로그에 `[instagram-webhook]`
+한 줄이 남는다. Vercel 대시보드 → 프로젝트 → **Logs** 에서 이 문자열로 필터한다.
+
+| 로그에 보이는 값 | 원인 | 조치 |
+|---|---|---|
+| 로그 자체가 없음 | Meta가 요청을 아예 안 보냄 | 아래 "요청이 오지 않을 때" 참고 |
+| `서명 검증 실패` | `INSTAGRAM_APP_SECRET`이 다른 앱 것이거나 공백이 섞임 | 값을 다시 붙여넣고 **Redeploy** |
+| `object: "page"` | Messenger(페이지) 제품으로 잘못 구독 | Instagram 제품의 웹훅으로 다시 설정 |
+| `skipped: { entry_without_messaging }` | `messages`가 아닌 필드(comments 등)를 구독 | 구독 필드에서 `messages` 체크 |
+| `skipped: { echo_from_collector_account }` | 수집용 계정이 **보낸** 메시지 | 다른 계정에서 수집용 계정으로 공유할 것 |
+| `droppedByAccountFilter > 0` | `INSTAGRAM_ACCOUNT_ID`가 실제 계정 ID와 다름 | 같이 찍히는 `payloadAccountIds` 값으로 교체 |
+| `skipped: { no_shared_post_url }` + 낯선 `attachmentTypes` | Meta가 새 첨부 타입으로 보냄 | `SHARE_ATTACHMENT_TYPES`에 추가 |
+
+**요청이 오지 않을 때** — 로그에 `[instagram-webhook]`이 한 줄도 없으면 코드까지
+도달하지 못한 것이다. Meta 쪽에서 순서대로 확인한다.
+
+1. 앱이 **개발 모드**면 앱에 역할(관리자·테스터)로 등록된 계정이 보낸 DM만 전달된다.
+   보내는 쪽 계정을 테스터로 초대하거나 앱을 라이브로 전환한다.
+2. 수집용 Instagram 앱에서 **설정 → 메시지 → 연결된 도구 → 메시지 액세스 허용**이 켜져 있어야 한다.
+   이게 꺼져 있으면 Meta는 웹훅을 전혀 보내지 않는다.
+3. Meta 대시보드 웹훅 화면의 **테스트 전송** 버튼으로 샘플 이벤트를 쏴 보고,
+   그때는 로그가 찍히는지 확인한다. 찍히면 배포·서명은 정상이고 1·2번 문제다.
+
 ---
 
 ## 알려진 한계
