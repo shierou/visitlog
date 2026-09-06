@@ -10,12 +10,39 @@ import {
 } from '../src/lib/autofill.ts';
 import { extractOgImage, isInstagramPostUrl } from '../src/lib/instagram-thumbnail.ts';
 
-test('마커가 있을 때만 이름을 뽑는다', () => {
+test('위치 마커가 있으면 그걸 이름으로 쓴다', () => {
   assert.equal(guessName('📍성수 베라짜뮤\n웨이팅 30분'), '성수 베라짜뮤');
   assert.equal(guessName('📌 카페 어니언 성수점 · 매일 11시'), '카페 어니언 성수점');
+});
 
-  // 실제로 들어온 캡션. 첫 줄을 이름으로 쓰면 이런 게 박힌다.
-  assert.equal(guessName('(공유) 아니 한국에 이런 곳이 있다고..? 💜 올가을엔 여기 꼭 같이 가자'), '');
+test('꺾쇠·대괄호로 감싼 제목을 이름으로 쓴다', () => {
+  // 실제로 들어온 향수 게시물
+  assert.equal(
+    guessName('< 르라보 - 앰브레트9 >\n\n오늘 소개해드릴 향수는 르라보의 앰브레트9입니다'),
+    '르라보 - 앰브레트9'
+  );
+  assert.equal(guessName('[성수 어니언] 빵이 맛있어요'), '성수 어니언');
+
+  // 말머리는 제목이 아니다. 다음 후보로 넘어가야 한다.
+  assert.equal(guessName('[광고] 올리브영 세일 추천템'), '올리브영 세일 추천템');
+});
+
+test('마커도 제목도 없으면 첫 줄을 정리해서 쓴다', () => {
+  // 틀려도 사용자가 고치는 게 빈 칸보다 낫다는 판단. 말머리·괄호·이모지·멘션을 걷어내고
+  // 첫 문장까지만 쓴다.
+  assert.equal(
+    guessName('(저장•공유)요즘 뜨는 경주 맛집 5(?)곳 다녀온 후기🍽️\n\n1. 이치니산도 🥪'),
+    '요즘 뜨는 경주 맛집 5곳 다녀온 후기'
+  );
+  assert.equal(
+    guessName('(공유) 아니 한국에 이런 곳이 있다고..? 💜 😝 @@ 올가을엔 여기 꼭 같이 가자..'),
+    '아니 한국에 이런 곳이 있다고'
+  );
+});
+
+test('건질 게 없으면 비워둔다', () => {
+  assert.equal(guessName('#맛집 #카페'), '');
+  assert.equal(guessName('  \n  '), '');
   assert.equal(guessName(''), '');
   assert.equal(guessName(null), '');
 });
@@ -72,7 +99,7 @@ test('한 번에 초기값을 만든다', () => {
   // 애초에 향수에 지역이 붙으면 목록이 이상해진다.
   assert.deepEqual(autofillFromCaption('< 르라보 - 앰브레트9 > 향수 소개, 성수 편집샵에서 시향'), {
     kind: 'item',
-    name: '',
+    name: '르라보 - 앰브레트9',
     category: '향수',
     region: '',
   });

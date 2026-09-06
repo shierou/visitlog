@@ -126,29 +126,84 @@ export function guessRegion(caption: string | null | undefined): string {
   return caption ? firstMatch(caption, REGION_RULES, REGIONS) : '';
 }
 
+/** `< 르라보 - 앰브레트9 >` 처럼 제목을 감싸는 괄호들. 소괄호는 부연 설명이 많아 뺐다. */
+const TITLE_BRACKETS: readonly [string, string][] = [
+  ['<', '>'],
+  ['〈', '〉'],
+  ['[', ']'],
+  ['【', '】'],
+  ['『', '』'],
+  ['「', '」'],
+];
+
+/** 제목처럼 감싸여 있어도 이름이 아닌 말머리 */
+const NOISE_WORDS = ['저장', '공유', '광고', '협찬', '내돈내산', '추천', '이벤트', '필독', '재업'];
+
+const MAX_NAME = 40;
+
+function isNoise(text: string): boolean {
+  const bare = text.replace(/[\s•·|,/]/gu, '');
+  return NOISE_WORDS.some((w) => bare === w || bare === w + w) || bare.length < 2;
+}
+
+function tidy(text: string): string {
+  return text
+    .replace(/#\S+/gu, '') // 해시태그
+    .replace(/@[A-Za-z0-9._]*/gu, '') // 멘션
+    .replace(EMOJI, '')
+    .replace(/\s+/gu, ' ')
+    .replace(/^[\s•·|,/\-–—:：]+|[\s•·|,/\-–—:：]+$/gu, '')
+    .trim();
+}
+
+function clamp(text: string): string {
+  if (text.length <= MAX_NAME) return text;
+  const cut = text.slice(0, MAX_NAME);
+  const space = cut.lastIndexOf(' ');
+  return (space > 8 ? cut.slice(0, space) : cut).trim();
+}
+
 /**
- * 캡션에서 장소 이름을 추측한다.
- * 📍 같은 위치 마커가 있을 때만 쓴다. 마커 없이 첫 줄을 가져오면
- * "아니 한국에 이런 곳이 있다고..?" 같은 게 이름 칸에 박힌다.
+ * 캡션에서 이름을 추측한다. 틀려도 사용자가 고치는 게 빈 칸을 채우는 것보다 빠르므로
+ * 확신이 없어도 뭐라도 내놓는다. 순서대로:
+ *   1) 📍 같은 위치 마커  2) < > 로 감싼 제목  3) 첫 줄 정리
  */
 export function guessName(caption: string | null | undefined): string {
   if (!caption) return '';
 
+  // 1) 위치 마커 — 가장 정확하다
   for (const marker of NAME_MARKERS) {
     const at = caption.indexOf(marker);
     if (at === -1) continue;
 
     const rest = caption.slice(at + marker.length);
     const stop = rest.search(NAME_STOP);
-    const candidate = (stop === -1 ? rest : rest.slice(0, stop))
-      .replace(EMOJI, '')
-      .replace(/[:：]/gu, ' ')
-      .trim();
-
-    if (candidate.length >= 2 && candidate.length <= 40) return candidate;
+    const candidate = tidy((stop === -1 ? rest : rest.slice(0, stop)).replace(/[:：]/gu, ' '));
+    if (candidate.length >= 2 && !isNoise(candidate)) return clamp(candidate);
   }
 
-  return '';
+  // 2) 꺾쇠·대괄호로 감싼 제목
+  for (const [open, close] of TITLE_BRACKETS) {
+    const start = caption.indexOf(open);
+    if (start === -1) continue;
+    const end = caption.indexOf(close, start + 1);
+    if (end === -1) continue;
+
+    const candidate = tidy(caption.slice(start + 1, end));
+    if (candidate.length >= 2 && !isNoise(candidate)) return clamp(candidate);
+  }
+
+  // 3) 첫 줄. "(저장•공유)" 같은 말머리와 괄호 부연을 걷어내고 첫 문장만 쓴다.
+  const firstLine = caption.split('\n').find((line) => tidy(line).length >= 2);
+  if (!firstLine) return '';
+
+  const stripped = firstLine
+    .replace(/^\s*[([{（【[][^)\]}）】]{0,12}[)\]}）】]\s*/u, '')
+    .replace(/\([^)]*\)/gu, '');
+  const sentence = tidy(stripped).split(/[.!?…]+/u)[0];
+  const candidate = tidy(sentence);
+
+  return candidate.length >= 2 && !isNoise(candidate) ? clamp(candidate) : '';
 }
 
 /* ── 여러 장소가 한 게시물에 담긴 경우 ──────────────────────────── */
