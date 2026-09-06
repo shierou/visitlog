@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, CURRENT_OWNER } from '@/lib/db';
-import { normalizePriority } from '@/lib/taxonomy';
+import { normalizePriority, normalizeKind } from '@/lib/taxonomy';
 import { fetchInstagramThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
 import { saveFile } from '@/lib/storage';
 
@@ -11,10 +11,12 @@ export async function GET(req: NextRequest) {
   const region = sp.get('region');
   const category = sp.get('category');
   const priority = sp.get('priority');
+  const kind = sp.get('kind');
   const places = await db.place.findMany({
     where: {
       ownerId: CURRENT_OWNER,
       ...(status ? { status } : {}),
+      ...(kind ? { kind } : {}),
       ...(region ? { region } : {}),
       ...(category ? { category } : {}),
       ...(priority ? { priority: normalizePriority(priority) } : {}),
@@ -60,12 +62,15 @@ export async function POST(req: NextRequest) {
       ? body.instagramImportId
       : null;
 
+  const kind = normalizeKind(body.kind);
   const shared = {
     ownerId: CURRENT_OWNER,
+    kind,
     category: body.category?.trim() || null,
-    region: body.region?.trim() || null,
+    // 물건에는 지역·주소가 없다. 폼에서 안 보내지만 여기서도 한 번 막는다.
+    region: kind === 'item' ? null : body.region?.trim() || null,
     priority: normalizePriority(body.priority),
-    address: body.address?.trim() || null,
+    address: kind === 'item' ? null : body.address?.trim() || null,
     source,
     sourceUrl: body.sourceUrl?.trim() || null,
     listId: body.listId || null,

@@ -14,9 +14,11 @@ type Meta = { region: string; category: string; priority: number };
 export default function PlaceMetaEditor({
   placeId,
   initial,
+  kind = 'place',
 }: {
   placeId: string;
   initial: Meta;
+  kind?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -66,8 +68,15 @@ export default function PlaceMetaEditor({
         </button>
       </div>
 
-      <RegionSelect value={meta.region} onChange={(region) => patch({ region })} />
-      <CategoryChips value={meta.category} onChange={(category) => patch({ category })} />
+      {/* 물건에는 지역이 의미 없다. */}
+      {kind !== 'item' && (
+        <RegionSelect value={meta.region} onChange={(region) => patch({ region })} />
+      )}
+      <CategoryChips
+        value={meta.category}
+        onChange={(category) => patch({ category })}
+        kind={kind}
+      />
       <PriorityChips value={meta.priority} onChange={(priority) => patch({ priority })} />
 
       <p className="text-xs text-neutral-400">

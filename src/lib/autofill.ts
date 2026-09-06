@@ -7,7 +7,7 @@
  */
 // node --test 가 확장자 없는 상대 경로를 못 찾는다. tsconfig 에 allowImportingTsExtensions 가
 // 켜져 있어 .ts 를 명시해도 타입체크·번들 모두 문제없다.
-import { CATEGORIES, REGIONS } from './taxonomy.ts';
+import { ITEM_CATEGORIES, PLACE_CATEGORIES, REGIONS, type Kind } from './taxonomy.ts';
 
 /** 캡션에서 장소명을 뽑는 마커. 인스타 게시물이 위치를 적을 때 거의 이 기호를 쓴다. */
 const NAME_MARKERS = ['📍', '📌', '🏠', '🏡', '🍽', '☕'];
@@ -40,6 +40,26 @@ const CATEGORY_RULES: readonly Rule[] = [
   { value: '쇼핑', keywords: ['쇼핑', '백화점', '소품샵', '편집샵', '아울렛', '시장'] },
   { value: '숙소', keywords: ['숙소', '호텔', '펜션', '리조트', '게스트하우스', '캠핑', '글램핑', '스테이'] },
   { value: '맛집', keywords: ['맛집', '밥집', '식당', '존맛', '웨이팅', '오마카세', '파스타', '스시', '국밥', '삼겹살'] },
+];
+
+/**
+ * 물건 종류 추측 규칙. 하나라도 맞으면 장소가 아니라 물건으로 본다.
+ * 장소 규칙보다 먼저 보므로, 장소와 헷갈릴 단어("편집샵")는 넣지 않는다.
+ */
+const ITEM_CATEGORY_RULES: readonly Rule[] = [
+  { value: '향수', keywords: ['향수', '오드퍼퓸', '오드뚜왈렛', '퍼퓸', '조향', '프래그런스', '탑노트', '베이스노트', '시향'] },
+  { value: '스킨케어', keywords: ['스킨케어', '토너', '세럼', '앰플', '에센스', '크림 추천', '선크림'] },
+  { value: '메이크업', keywords: ['립스틱', '틴트', '쿠션', '파운데이션', '아이섀도', '블러셔', '마스카라'] },
+  { value: '헤어·바디', keywords: ['샴푸', '트리트먼트', '바디워시', '핸드크림', '바디로션'] },
+  { value: '신발', keywords: ['운동화', '스니커즈', '구두', '샌들', '부츠', '로퍼'] },
+  { value: '가방', keywords: ['가방', '백팩', '토트백', '크로스백', '숄더백', '파우치'] },
+  { value: '액세서리', keywords: ['목걸이', '귀걸이', '반지', '팔찌', '시계 추천', '선글라스'] },
+  { value: '의류', keywords: ['의류', '코디', '아우터', '니트', '셔츠', '원피스', '바지', '자켓', '재킷', '코트', '패딩'] },
+  { value: '전자기기', keywords: ['이어폰', '헤드폰', '노트북', '태블릿', '키보드', '마우스', '카메라', '스마트워치'] },
+  { value: '리빙', keywords: ['디퓨저', '캔들', '조명', '러그', '수납', '인테리어 소품'] },
+  { value: '문구', keywords: ['다이어리', '노트 추천', '만년필', '스티커'] },
+  { value: '책', keywords: ['책 추천', '신간', '베스트셀러', '에세이', '소설 추천'] },
+  { value: '식품', keywords: ['밀키트', '간식 추천', '원두', '차 추천', '영양제'] },
 ];
 
 /**
@@ -83,9 +103,22 @@ function firstMatch(text: string, rules: readonly Rule[], allowed: readonly stri
   return '';
 }
 
+/**
+ * 장소 이야기인지 물건 이야기인지 추측한다.
+ * 물건 키워드가 하나라도 잡히면 물건으로 본다. 향수·의류 소개 게시물이
+ * "가고 싶은 곳" 목록에 들어가면 목록이 망가진다.
+ */
+export function guessKind(caption: string | null | undefined): Kind {
+  if (!caption) return 'place';
+  return firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES) ? 'item' : 'place';
+}
+
 /** 캡션에서 종류를 추측한다. 못 찾으면 빈 문자열. */
-export function guessCategory(caption: string | null | undefined): string {
-  return caption ? firstMatch(caption, CATEGORY_RULES, CATEGORIES) : '';
+export function guessCategory(caption: string | null | undefined, kind: Kind = 'place'): string {
+  if (!caption) return '';
+  return kind === 'item'
+    ? firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES)
+    : firstMatch(caption, CATEGORY_RULES, PLACE_CATEGORIES);
 }
 
 /** 캡션에서 지역을 추측한다. 못 찾으면 빈 문자열. */
@@ -190,13 +223,16 @@ export function splitNumberedPlaces(caption: string | null | undefined): SplitPl
   }));
 }
 
-export type Autofill = { name: string; category: string; region: string };
+export type Autofill = { kind: Kind; name: string; category: string; region: string };
 
 /** 폼 초기값 한 번에. */
 export function autofillFromCaption(caption: string | null | undefined): Autofill {
+  const kind = guessKind(caption);
   return {
+    kind,
     name: guessName(caption),
-    category: guessCategory(caption),
-    region: guessRegion(caption),
+    category: guessCategory(caption, kind),
+    // 물건에는 지역이 의미 없다.
+    region: kind === 'item' ? '' : guessRegion(caption),
   };
 }

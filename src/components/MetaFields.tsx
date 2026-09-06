@@ -1,25 +1,53 @@
 'use client';
 
-import { CATEGORY_GROUPS, REGION_GROUPS, PRIORITIES } from '@/lib/taxonomy';
+import { categoryGroups, REGION_GROUPS, PRIORITIES, KINDS } from '@/lib/taxonomy';
 
 const CHIP_ON = 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900';
 const CHIP_OFF = 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400';
 const SELECT =
   'mt-1.5 w-full appearance-none rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none dark:bg-neutral-800';
 
-/** 종류. 그룹 라벨을 얇게 깔아 항목이 많아도 눈으로 훑을 수 있게 한다. */
-export function CategoryChips({
+/** 장소냐 물건이냐. 이 선택에 따라 아래 종류 칩과 지역 표시가 갈린다. */
+export function KindTabs({
   value,
   onChange,
 }: {
   value: string;
+  onChange: (v: 'place' | 'item') => void;
+}) {
+  return (
+    <div className="flex gap-1.5">
+      {KINDS.map((k) => (
+        <button
+          key={k.value}
+          type="button"
+          onClick={() => onChange(k.value)}
+          className={`flex-1 rounded-xl px-3 py-2.5 text-sm ${
+            value === k.value ? CHIP_ON : CHIP_OFF
+          }`}
+        >
+          {k.emptyIcon} {k.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 종류. 그룹 라벨을 얇게 깔아 항목이 많아도 눈으로 훑을 수 있게 한다. */
+export function CategoryChips({
+  value,
+  onChange,
+  kind = 'place',
+}: {
+  value: string;
   onChange: (v: string) => void;
+  kind?: string;
 }) {
   return (
     <div>
       <label className="text-sm font-medium">종류</label>
       <div className="mt-1.5 space-y-2">
-        {CATEGORY_GROUPS.map((g) => (
+        {categoryGroups(kind).map((g) => (
           <div key={g.label} className="flex flex-wrap items-center gap-1.5">
             <span className="w-8 shrink-0 text-[11px] text-neutral-400">{g.label}</span>
             {g.items.map((c) => (

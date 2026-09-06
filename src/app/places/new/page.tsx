@@ -4,8 +4,8 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
-import { CategoryChips, RegionSelect, PriorityChips } from '@/components/MetaFields';
-import { PRIORITY } from '@/lib/taxonomy';
+import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
+import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitNumberedPlaces } from '@/lib/autofill';
 
 type Row = { name: string; memo: string; checked: boolean };
@@ -25,6 +25,7 @@ function NewPlaceForm() {
   const [rows, setRows] = useState<Row[]>(split);
   const [multi, setMulti] = useState(split.length > 0);
 
+  const [kind, setKind] = useState<Kind>(guessed.kind);
   const [name, setName] = useState(guessed.name);
   const [memo, setMemo] = useState(initialMemo);
   const [category, setCategory] = useState(guessed.category);
@@ -34,8 +35,16 @@ function NewPlaceForm() {
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
 
+  const meta = kindMeta(kind);
   const picked = rows.filter((r) => r.checked && r.name.trim());
   const canSave = multi ? picked.length > 0 : Boolean(name.trim());
+
+  function changeKind(next: Kind) {
+    setKind(next);
+    // 장소 종류와 물건 종류는 목록이 아예 달라서 값을 들고 갈 수 없다.
+    setCategory('');
+    if (next === 'item') setRegion('');
+  }
 
   function updateRow(index: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
@@ -47,6 +56,7 @@ function NewPlaceForm() {
     setSaving(true);
     try {
       const shared = {
+        kind,
         category,
         region,
         priority,
@@ -67,7 +77,7 @@ function NewPlaceForm() {
       const result = await res.json();
 
       if (multi) {
-        router.push('/?tab=wishlist');
+        router.push(kind === 'item' ? '/?tab=items' : '/?tab=wishlist');
       } else {
         await uploadStaged(shots, result.id, 'reference');
         router.push(`/places/${result.id}`);
@@ -86,7 +96,7 @@ function NewPlaceForm() {
           취소
         </Link>
         <span className="font-semibold">
-          {multi ? `가고 싶은 곳 ${picked.length}곳 추가` : '가고 싶은 곳 추가'}
+          {multi ? `${meta.wishLabel} ${picked.length}개 추가` : `${meta.wishLabel} 추가`}
         </span>
         <button
           type="submit"
@@ -98,10 +108,12 @@ function NewPlaceForm() {
       </header>
 
       <div className="space-y-6 px-4 py-5">
+        <KindTabs value={kind} onChange={changeKind} />
+
         {multi ? (
           <div>
             <div className="flex items-baseline justify-between">
-              <label className="text-sm font-medium">이 게시물에서 찾은 곳</label>
+              <label className="text-sm font-medium">이 게시물에서 찾은 것</label>
               <button
                 type="button"
                 onClick={() => setMulti(false)}
@@ -111,7 +123,7 @@ function NewPlaceForm() {
               </button>
             </div>
             <p className="mt-1 text-xs text-neutral-400">
-              등록할 곳만 체크하세요. 이름은 눌러서 고칠 수 있어요.
+              등록할 것만 체크하세요. 이름은 눌러서 고칠 수 있어요.
             </p>
 
             <div className="mt-2 space-y-2">
@@ -154,7 +166,7 @@ function NewPlaceForm() {
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="예: 성수 베라짜뮤"
+                placeholder={kind === 'item' ? '예: 르라보 앰브레트9' : '예: 성수 베라짜뮤'}
                 className="mt-1.5 w-full rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />
             </div>
@@ -164,21 +176,23 @@ function NewPlaceForm() {
                 onClick={() => setMulti(true)}
                 className="text-xs text-blue-600 underline"
               >
-                {split.length}곳으로 나눠서 등록하기
+                {split.length}개로 나눠서 등록하기
               </button>
             )}
           </>
         )}
 
-        <RegionSelect value={region} onChange={setRegion} />
+        {/* 물건에는 지역이 의미 없다. */}
+        {kind !== 'item' && <RegionSelect value={region} onChange={setRegion} />}
 
-        <CategoryChips value={category} onChange={setCategory} />
+        <CategoryChips value={category} onChange={setCategory} kind={kind} />
 
         <PriorityChips value={priority} onChange={setPriority} />
 
         {multi ? (
           <p className="text-xs text-neutral-400">
-            지역·종류·우선순위는 {picked.length}곳에 함께 적용돼요. 메모는 항목별로 저장됩니다.
+            {kind === 'item' ? '종류·우선순위' : '지역·종류·우선순위'}는 {picked.length}개에 함께
+            적용돼요. 메모는 항목별로 저장됩니다.
           </p>
         ) : (
           <>
@@ -188,7 +202,11 @@ function NewPlaceForm() {
                 value={memo}
                 onChange={(e) => setMemo(e.target.value)}
                 rows={2}
-                placeholder="뭐가 맛있다더라, 예약 필요, 웨이팅 길다…"
+                placeholder={
+                  kind === 'item'
+                    ? '어디서 파는지, 가격, 향 계열…'
+                    : '뭐가 맛있다더라, 예약 필요, 웨이팅 길다…'
+                }
                 className="mt-1.5 w-full resize-none rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />
             </div>

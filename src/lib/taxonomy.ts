@@ -8,14 +8,75 @@
 
 type Group = { label: string; items: readonly string[] };
 
-export const CATEGORY_GROUPS: readonly Group[] = [
+/**
+ * 저장하는 대상의 종류.
+ *   place = 가고 싶은 곳   item = 사고 싶은 것(향수·의류 등)
+ * 인스타 DM 으로 장소만 오는 게 아니라 제품 소개도 넘어와서 갈랐다.
+ * 겹치는 필드가 대부분이라 테이블은 하나로 두고 라벨만 다르게 쓴다.
+ */
+export type Kind = 'place' | 'item';
+
+export type KindMeta = {
+  value: Kind;
+  label: string;
+  /** 아직 안 한 것 / 한 것 — 탭과 버튼 문구가 전부 여기서 나온다 */
+  wishLabel: string;
+  doneLabel: string;
+  doneVerb: string;
+  emptyIcon: string;
+};
+
+export const KINDS: readonly KindMeta[] = [
+  {
+    value: 'place',
+    label: '장소',
+    wishLabel: '가고 싶은 곳',
+    doneLabel: '다녀온 곳',
+    doneVerb: '다녀왔어요',
+    emptyIcon: '📍',
+  },
+  {
+    value: 'item',
+    label: '물건',
+    wishLabel: '사고 싶은 것',
+    doneLabel: '산 것',
+    doneVerb: '샀어요',
+    emptyIcon: '🛍️',
+  },
+];
+
+export function kindMeta(value: string | null | undefined): KindMeta {
+  return KINDS.find((k) => k.value === value) ?? KINDS[0];
+}
+
+export function normalizeKind(raw: unknown): Kind {
+  return raw === 'item' ? 'item' : 'place';
+}
+
+export const PLACE_CATEGORY_GROUPS: readonly Group[] = [
   { label: '먹기', items: ['맛집', '카페', '베이커리', '디저트', '술집'] },
   { label: '보기', items: ['전시', '영화관', '공연', '팝업', '축제'] },
   { label: '놀기', items: ['방탈출', '보드게임', '액티비티', '산책', '쇼핑'] },
   { label: '그 외', items: ['숙소', '기타'] },
 ];
 
-export const CATEGORIES: readonly string[] = CATEGORY_GROUPS.flatMap((g) => g.items);
+export const ITEM_CATEGORY_GROUPS: readonly Group[] = [
+  { label: '입기', items: ['의류', '신발', '가방', '액세서리'] },
+  { label: '바르기', items: ['향수', '스킨케어', '메이크업', '헤어·바디'] },
+  { label: '쓰기', items: ['전자기기', '리빙', '문구', '책'] },
+  { label: '그 외', items: ['식품', '기타 물건'] },
+];
+
+export function categoryGroups(kind: string | null | undefined): readonly Group[] {
+  return kind === 'item' ? ITEM_CATEGORY_GROUPS : PLACE_CATEGORY_GROUPS;
+}
+
+/** 하위 호환. 기존 호출부와 자동 채움의 허용 목록 검사에 쓴다. */
+export const CATEGORY_GROUPS = PLACE_CATEGORY_GROUPS;
+
+export const PLACE_CATEGORIES: readonly string[] = PLACE_CATEGORY_GROUPS.flatMap((g) => g.items);
+export const ITEM_CATEGORIES: readonly string[] = ITEM_CATEGORY_GROUPS.flatMap((g) => g.items);
+export const CATEGORIES: readonly string[] = [...PLACE_CATEGORIES, ...ITEM_CATEGORIES];
 
 /**
  * 광역시·도 단위. 서울 상권(성수·홍대…)으로 끊었더니 지방을 담을 자리가 없었다.

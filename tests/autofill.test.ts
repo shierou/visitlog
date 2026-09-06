@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   autofillFromCaption,
   guessCategory,
+  guessKind,
   guessName,
   guessRegion,
   splitNumberedPlaces,
@@ -40,13 +41,48 @@ test('지역명이 겹치면 서울보다 다른 지역을 먼저 본다', () =>
   assert.equal(guessRegion('광주 양림동 카페'), '광주');
 });
 
+test('장소 이야기와 물건 이야기를 가른다', () => {
+  // 실제로 DM 으로 온 향수 소개 게시물
+  assert.equal(guessKind('< 르라보 - 앰브레트9 > 오늘 소개해드릴 향수는 르라보의…'), 'item');
+  assert.equal(guessKind('탑노트는 상큼하고 베이스노트가 포근해요'), 'item');
+  assert.equal(guessKind('가을 니트 코디 추천'), 'item');
+
+  assert.equal(guessKind('성수동 웨이팅 긴 파스타 맛집'), 'place');
+  assert.equal(guessKind('제주 애월 카페 투어'), 'place');
+  assert.equal(guessKind(null), 'place');
+});
+
+test('종류는 장소·물건 목록에서 각각 고른다', () => {
+  assert.equal(guessCategory('오늘 소개할 향수는', 'item'), '향수');
+  assert.equal(guessCategory('가을 니트 추천', 'item'), '의류');
+  // 물건 목록에는 '맛집'이 없으므로 비어야 한다
+  assert.equal(guessCategory('웨이팅 긴 맛집', 'item'), '');
+  assert.equal(guessCategory('웨이팅 긴 맛집', 'place'), '맛집');
+});
+
 test('한 번에 초기값을 만든다', () => {
   assert.deepEqual(autofillFromCaption('📍제주 애월 소금빵 맛집'), {
+    kind: 'place',
     name: '제주 애월 소금빵 맛집',
     category: '베이커리',
     region: '제주',
   });
-  assert.deepEqual(autofillFromCaption(null), { name: '', category: '', region: '' });
+
+  // 물건이면 지역을 채우지 않는다. "르라보"의 '보'가 지역으로 잡혀도 안 되고,
+  // 애초에 향수에 지역이 붙으면 목록이 이상해진다.
+  assert.deepEqual(autofillFromCaption('< 르라보 - 앰브레트9 > 향수 소개, 성수 편집샵에서 시향'), {
+    kind: 'item',
+    name: '',
+    category: '향수',
+    region: '',
+  });
+
+  assert.deepEqual(autofillFromCaption(null), {
+    kind: 'place',
+    name: '',
+    category: '',
+    region: '',
+  });
 });
 
 test('인스타 게시물 주소만 허용한다', () => {

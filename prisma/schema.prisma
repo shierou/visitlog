@@ -19,8 +19,14 @@ model List {
 }
 
 model Place {
-  id       String  @id @default(cuid())
-  ownerId  String  @default("local")
+  id      String @id @default(cuid())
+  ownerId String @default("local")
+
+  // 'place' = 가고 싶은 곳 | 'item' = 사고 싶은 것(향수·의류 등).
+  // 겹치는 필드가 대부분이라 테이블을 나누지 않고 구분자만 뒀다.
+  // item 은 region·address·lat·lng·visits 를 쓰지 않는다.
+  kind String @default("place")
+
   name     String
   memo     String?
   category String?
@@ -56,6 +62,7 @@ model Place {
   @@index([ownerId, status])
   @@index([ownerId, status, priority])
   @@index([ownerId, region])
+  @@index([ownerId, kind, status])
 }
 
 // Instagram DM으로 공유된 게시물을 장소로 정리하기 전까지 보관하는 수집함.

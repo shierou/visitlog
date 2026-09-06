@@ -1,7 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { CATEGORY_GROUPS, REGION_GROUPS, PRIORITIES } from '@/lib/taxonomy';
+import { categoryGroups, REGION_GROUPS, PRIORITIES } from '@/lib/taxonomy';
 
 export type Filters = {
   tab: string;
@@ -15,7 +15,7 @@ const BASE = 'min-w-0 flex-1 appearance-none truncate rounded-lg px-2.5 py-2 tex
 const OFF = 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400';
 const ON = 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900';
 
-export default function PlaceFilters({ filters }: { filters: Filters }) {
+export default function PlaceFilters({ filters, kind = 'place' }: { filters: Filters; kind?: string }) {
   const router = useRouter();
   const active = Boolean(filters.region || filters.category || filters.priority);
 
@@ -42,22 +42,25 @@ export default function PlaceFilters({ filters }: { filters: Filters }) {
       </form>
 
       <div className="flex items-center gap-1.5">
-        <select
-          value={filters.region}
-          onChange={(e) => go({ region: e.target.value })}
-          className={`${BASE} ${filters.region ? ON : OFF}`}
-        >
-          <option value="">지역 전체</option>
-          {REGION_GROUPS.map((g) => (
-            <optgroup key={g.label} label={g.label}>
-              {g.items.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
+        {/* 물건에는 지역이 없다. */}
+        {kind !== 'item' && (
+          <select
+            value={filters.region}
+            onChange={(e) => go({ region: e.target.value })}
+            className={`${BASE} ${filters.region ? ON : OFF}`}
+          >
+            <option value="">지역 전체</option>
+            {REGION_GROUPS.map((g) => (
+              <optgroup key={g.label} label={g.label}>
+                {g.items.map((r) => (
+                  <option key={r} value={r}>
+                    {r}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        )}
 
         <select
           value={filters.category}
@@ -65,7 +68,7 @@ export default function PlaceFilters({ filters }: { filters: Filters }) {
           className={`${BASE} ${filters.category ? ON : OFF}`}
         >
           <option value="">종류 전체</option>
-          {CATEGORY_GROUPS.map((g) => (
+          {categoryGroups(kind).map((g) => (
             <optgroup key={g.label} label={g.label}>
               {g.items.map((c) => (
                 <option key={c} value={c}>

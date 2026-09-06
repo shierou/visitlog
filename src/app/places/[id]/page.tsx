@@ -6,7 +6,8 @@ import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
 import ReferencePhotos from '@/components/ReferencePhotos';
 import { DeletePlaceButton, DeleteVisitButton } from '@/components/DangerActions';
 import PlaceMetaEditor from '@/components/PlaceMetaEditor';
-import { priorityMeta } from '@/lib/taxonomy';
+import BoughtToggle from '@/components/BoughtToggle';
+import { priorityMeta, kindMeta } from '@/lib/taxonomy';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,8 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
   const urls = Object.fromEntries(place.media.map((m) => [m.id, publicUrl(m.path)]));
   const firstVisit = place.visits.at(-1);
   const pr = priorityMeta(place.priority);
+  const meta = kindMeta(place.kind);
+  const isItem = place.kind === 'item';
 
   return (
     <>
@@ -53,7 +56,9 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
         <p className="mt-1 text-xs text-neutral-400">
           {place.region && `📍 ${place.region} · `}
           {fmtDate(place.createdAt)} 저장
-          {firstVisit && ` · ${daysBetween(place.createdAt, firstVisit.visitedOn)}일 만에 방문`}
+          {isItem
+            ? place.status === 'visited' && ` · ✓ ${meta.doneVerb}`
+            : firstVisit && ` · ${daysBetween(place.createdAt, firstVisit.visitedOn)}일 만에 방문`}
         </p>
 
         {place.memo && <p className="mt-3 whitespace-pre-wrap text-sm">{place.memo}</p>}
@@ -72,6 +77,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
 
       <PlaceMetaEditor
         placeId={place.id}
+        kind={place.kind}
         initial={{
           region: place.region ?? '',
           category: place.category ?? '',
@@ -82,15 +88,25 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
       <ReferencePhotos placeId={place.id} items={refs} urls={urls} />
 
       <div className="px-4 pb-2">
-        <Link
-          href={`/places/${place.id}/visit`}
-          className="block w-full rounded-2xl bg-neutral-900 py-4 text-center font-semibold text-white dark:bg-white dark:text-neutral-900"
-        >
-          {place.visits.length ? '또 다녀왔어요' : '다녀왔어요'}
-        </Link>
+        {/* 물건은 방문 기록 대신 샀는지 여부만 있으면 된다. */}
+        {isItem ? (
+          <BoughtToggle
+            placeId={place.id}
+            bought={place.status === 'visited'}
+            doneVerb={meta.doneVerb}
+          />
+        ) : (
+          <Link
+            href={`/places/${place.id}/visit`}
+            className="block w-full rounded-2xl bg-neutral-900 py-4 text-center font-semibold text-white dark:bg-white dark:text-neutral-900"
+          >
+            {place.visits.length ? '또 다녀왔어요' : '다녀왔어요'}
+          </Link>
+        )}
       </div>
 
-      <section className="px-4 py-4">
+      {/* 물건에는 방문 기록이 없다. */}
+      <section className={`px-4 py-4 ${isItem ? 'hidden' : ''}`}>
         <h2 className="mb-2 text-sm font-semibold text-neutral-500">
           방문 기록 {place.visits.length > 0 && `(${place.visits.length}회)`}
         </h2>

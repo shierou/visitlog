@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { publicUrl } from '@/lib/storage';
 import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
-import { priorityMeta, normalizePriority } from '@/lib/taxonomy';
+import { priorityMeta, normalizePriority, kindMeta } from '@/lib/taxonomy';
 import PlaceFilters from '@/components/PlaceFilters';
 
 export const dynamic = 'force-dynamic';
@@ -21,10 +21,18 @@ export default async function Home({
   const { tab = 'wishlist', q = '', region = '', category = '', priority = '' } =
     await searchParams;
 
+  // 탭 하나가 kind + status 조합을 정한다.
+  //   wishlist 가고 싶은 곳 | visited 다녀온 곳 | items 사고 싶은 것(산 것 포함)
+  const kind = tab === 'items' ? 'item' : 'place';
+  const meta = kindMeta(kind);
+
   const places = await db.place.findMany({
     where: {
       ownerId: CURRENT_OWNER,
-      status: tab === 'visited' ? 'visited' : 'wishlist',
+      kind,
+      // 물건은 산 것까지 한 탭에 두고 목록 안에서 구분한다.
+      // 탭을 넷으로 늘리면 폰 가로폭에서 넘친다.
+      ...(kind === 'item' ? {} : { status: tab === 'visited' ? 'visited' : 'wishlist' }),
       ...(q ? { name: { contains: q } } : {}),
       ...(region ? { region } : {}),
       ...(category ? { category } : {}),
@@ -39,12 +47,14 @@ export default async function Home({
     orderBy:
       tab === 'visited'
         ? [{ updatedAt: 'desc' }]
-        : [{ priority: 'desc' }, { createdAt: 'desc' }],
+        : // 물건 탭에서는 산 것을 아래로 내린다. 'visited' < 'wishlist' 라 asc 면 산 것이 먼저이므로 desc.
+          [{ status: 'desc' }, { priority: 'desc' }, { createdAt: 'desc' }],
   });
 
-  const [wishCount, visitedCount, instagramCount] = await Promise.all([
-    db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'wishlist' } }),
-    db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'visited' } }),
+  const [wishCount, visitedCount, itemCount, instagramCount] = await Promise.all([
+    db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'place', status: 'wishlist' } }),
+    db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'place', status: 'visited' } }),
+    db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'item', status: 'wishlist' } }),
     db.instagramImport.count({ where: { ownerId: CURRENT_OWNER, status: 'pending' } }),
   ]);
 
@@ -54,7 +64,7 @@ export default async function Home({
         <div className="px-4 pb-3 pt-5">
           <h1 className="text-xl font-bold">다녀왔어요</h1>
           <p className="mt-0.5 text-xs text-neutral-500">
-            가고 싶은 곳 {wishCount} · 다녀온 곳 {visitedCount}
+            가고 싶은 곳 {wishCount} · 다녀온 곳 {visitedCount} · 사고 싶은 것 {itemCount}
           </p>
         </div>
 
@@ -62,6 +72,7 @@ export default async function Home({
           {[
             { key: 'wishlist', label: `가고 싶은 곳 ${wishCount}` },
             { key: 'visited', label: `다녀온 곳 ${visitedCount}` },
+            { key: 'items', label: `사고 싶은 것 ${itemCount}` },
           ].map((t) => (
             <Link
               key={t.key}
@@ -90,7 +101,7 @@ export default async function Home({
         </nav>
       </header>
 
-      <PlaceFilters filters={{ tab, q, region, category, priority }} />
+      <PlaceFilters filters={{ tab, q, region, category, priority }} kind={kind} />
 
       <ul className="space-y-2 px-4">
         {places.map((p) => {
@@ -112,7 +123,7 @@ export default async function Home({
                   />
                 ) : (
                   <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-xl dark:bg-neutral-800">
-                    📍
+                    {meta.emptyIcon}
                   </div>
                 )}
 
@@ -142,7 +153,9 @@ export default async function Home({
                   )}
 
                   <p className="mt-1 text-xs text-neutral-400">
-                    {last ? (
+                    {kind === 'item' && p.status === 'visited' ? (
+                      <>✓ {meta.doneVerb}</>
+                    ) : last ? (
                       <>
                         {fmtDate(last.visitedOn)} 방문
                         {last.rating ? ` · ${'★'.repeat(last.rating)}` : ''}
@@ -161,10 +174,10 @@ export default async function Home({
         {places.length === 0 && (
           <li className="py-20 text-center text-sm text-neutral-400">
             {q || region || category || priority
-              ? '조건에 맞는 곳이 없어요'
+              ? '조건에 맞는 게 없어요'
               : tab === 'visited'
                 ? '아직 다녀온 곳이 없어요'
-                : '＋ 를 눌러 가고 싶은 곳을 추가해보세요'}
+                : `＋ 를 눌러 ${meta.wishLabel}을 추가해보세요`}
           </li>
         )}
       </ul>
