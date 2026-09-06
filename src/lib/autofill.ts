@@ -118,6 +118,78 @@ export function guessName(caption: string | null | undefined): string {
   return '';
 }
 
+/* ── 여러 장소가 한 게시물에 담긴 경우 ──────────────────────────── */
+
+export type SplitPlace = { name: string; memo: string };
+
+/** `1.` `1)` `1️⃣` `①` 을 항목 머리로 본다. 인스타 캡션이 쓰는 표기가 제각각이다. */
+const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
+const HEAD_PATTERNS: readonly { re: RegExp; num: (m: RegExpMatchArray) => number }[] = [
+  { re: /^\s*(\d{1,2})\s*[.)]\s*(\S.*)$/u, num: (m) => Number(m[1]) },
+  { re: /^\s*(\d)️?⃣\s*(\S.*)$/u, num: (m) => Number(m[1]) },
+  { re: new RegExp(`^\\s*([${CIRCLED}])\\s*(\\S.*)$`, 'u'), num: (m) => CIRCLED.indexOf(m[1]) + 1 },
+];
+
+function matchHead(line: string): { no: number; rest: string } | null {
+  for (const { re, num } of HEAD_PATTERNS) {
+    const m = line.match(re);
+    if (m) return { no: num(m), rest: m[2] };
+  }
+  return null;
+}
+
+function cleanName(raw: string): string {
+  return raw
+    .replace(EMOJI, '')
+    .replace(/[·•\-–—:：]+\s*$/u, '')
+    .trim();
+}
+
+/**
+ * "1. 이치니산도 / 2. 베이시크 …" 처럼 번호가 붙은 목록을 장소별로 쪼갠다.
+ *
+ * 번호가 1부터 연속으로 올라갈 때만 목록으로 인정한다. 그렇게 안 하면
+ * "2인 이상 주문가능", "1일차" 같은 줄이 항목 머리로 잡힌다.
+ * 2곳 미만이면 목록이 아니라고 보고 빈 배열을 돌려준다.
+ */
+export function splitNumberedPlaces(caption: string | null | undefined): SplitPlace[] {
+  if (!caption) return [];
+
+  const items: { name: string; body: string[] }[] = [];
+  let current: { name: string; body: string[] } | null = null;
+  let expected = 1;
+
+  for (const line of caption.split('\n')) {
+    const head = matchHead(line);
+
+    if (head && head.no === expected) {
+      const name = cleanName(head.rest);
+      // 이름이 비거나 문장 길이면 목록 항목이 아니라고 본다.
+      if (!name || name.length > 40) {
+        current?.body.push(line);
+        continue;
+      }
+      if (current) items.push(current);
+      current = { name, body: [] };
+      expected += 1;
+      continue;
+    }
+
+    if (!current) continue;
+    // 해시태그 줄부터는 본문이 끝난 것으로 본다.
+    if (/^\s*#/u.test(line)) break;
+    current.body.push(line);
+  }
+
+  if (current) items.push(current);
+  if (items.length < 2) return [];
+
+  return items.map((item) => ({
+    name: item.name,
+    memo: item.body.join('\n').replace(/\n{3,}/gu, '\n\n').trim(),
+  }));
+}
+
 export type Autofill = { name: string; category: string; region: string };
 
 /** 폼 초기값 한 번에. */
