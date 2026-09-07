@@ -5,6 +5,16 @@ import { prepareImage, type PreparedImage } from '@/lib/image';
 
 export type Staged = PreparedImage & { key: string };
 
+// key 는 React 목록용이라 겹치면 안 된다. 같은 밀리초에 두 번 고르는 일이 실제로 있어서
+// 시각이 아니라 세는 수를 쓴다.
+let stagedSeq = 0;
+
+/** 고른 파일을 업로드 대기 상태로 만든다. 줄마다 사진을 붙이는 폼에서도 쓴다. */
+export async function stageFiles(files: FileList | File[]): Promise<Staged[]> {
+  const prepared = await Promise.all(Array.from(files).map(prepareImage));
+  return prepared.map((p) => ({ ...p, key: `staged-${stagedSeq++}` }));
+}
+
 export async function uploadStaged(
   staged: Staged[],
   placeId: string,
@@ -44,11 +54,7 @@ export default function PhotoPicker({
     if (!files?.length) return;
     setBusy(true);
     try {
-      const prepared = await Promise.all(Array.from(files).map(prepareImage));
-      onChange([
-        ...staged,
-        ...prepared.map((p, i) => ({ ...p, key: `${Date.now()}-${i}` })),
-      ]);
+      onChange([...staged, ...(await stageFiles(files))]);
     } finally {
       setBusy(false);
       if (inputRef.current) inputRef.current.value = '';

@@ -1,15 +1,20 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
+import PhotoPicker, { stageFiles, uploadStaged, type Staged } from '@/components/PhotoPicker';
 import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
 import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
 
-type Row = { name: string; memo: string; checked: boolean };
+/**
+ * 여러 개로 나눠 등록할 때의 한 줄.
+ * photo 는 그 줄로 만들어진 항목에만 붙는 사진이다. 캐러셀을 넘기며 찍은 향수 사진처럼
+ * 이미지 한 장이 곧 제품 하나인 게시물이 흔해서, 목록 전체가 아니라 줄마다 들고 있다.
+ */
+type Row = { name: string; memo: string; checked: boolean; photo: Staged | null };
 
 function NewPlaceForm() {
   const router = useRouter();
@@ -21,7 +26,7 @@ function NewPlaceForm() {
 
   // "1. 이치니산도 / 2. 베이시크 …" 처럼 여러 개가 담긴 게시물이면 나눠서 고르게 한다.
   const [split] = useState<Row[]>(() =>
-    splitListItems(initialMemo).map((p) => ({ ...p, checked: true }))
+    splitListItems(initialMemo).map((p) => ({ ...p, checked: true, photo: null }))
   );
   const [rows, setRows] = useState<Row[]>(split);
   const [multi, setMulti] = useState(split.length > 0);
@@ -37,10 +42,19 @@ function NewPlaceForm() {
   const [thumbnailUrl] = useState(() => searchParams.get('thumbnailUrl') ?? '');
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
+  // 사진을 리사이즈·압축하는 동안 같은 파일을 두 번 밀어 넣지 않게 막는다.
+  const [staging, setStaging] = useState(false);
+
+  // 줄 추가용(여러 장)과 줄 하나 교체용(한 장)은 동작이 달라서 입력칸을 따로 둔다.
+  const addPhotosRef = useRef<HTMLInputElement>(null);
+  const rowPhotoRef = useRef<HTMLInputElement>(null);
+  const rowPhotoTarget = useRef<number | null>(null);
 
   const meta = kindMeta(kind);
   const picked = rows.filter((r) => r.checked && r.name.trim());
   const canSave = multi ? picked.length > 0 : Boolean(name.trim());
+  // 사진만 있고 이름이 빈 줄은 저장에서 조용히 빠진다. 빠지기 전에 알려준다.
+  const unnamed = rows.filter((r) => r.checked && !r.name.trim() && r.photo).length;
 
   function changeKind(next: Kind) {
     setKind(next);
@@ -54,11 +68,48 @@ function NewPlaceForm() {
   }
 
   function addRow() {
-    setRows((prev) => [...prev, { name: '', memo: '', checked: true }]);
+    setRows((prev) => [...prev, { name: '', memo: '', checked: true, photo: null }]);
   }
 
   function removeRow(index: number) {
     setRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * 캐러셀을 넘기며 찍은 사진을 한꺼번에 고르면 사진 수만큼 줄이 생긴다.
+   * 이름 없이 비어 있던 줄부터 채워야 처음 열린 빈 줄이 그대로 남지 않는다.
+   */
+  async function addRowsFromPhotos(files: File[]) {
+    if (files.length === 0 || staging) return;
+    setStaging(true);
+    try {
+      const queue = await stageFiles(files);
+      setRows((prev) => {
+        const next = prev.map((r) => ({ ...r }));
+        for (const row of next) {
+          if (queue.length === 0) break;
+          if (!row.photo && !row.name.trim()) row.photo = queue.shift()!;
+        }
+        return [
+          ...next,
+          ...queue.map((photo) => ({ name: '', memo: '', checked: true, photo })),
+        ];
+      });
+    } finally {
+      setStaging(false);
+    }
+  }
+
+  /** 이미 있는 줄의 사진만 바꾼다. 줄은 늘리지 않는다. */
+  async function setRowPhoto(index: number, file: File | undefined) {
+    if (!file || staging) return;
+    setStaging(true);
+    try {
+      const [photo] = await stageFiles([file]);
+      updateRow(index, { photo });
+    } finally {
+      setStaging(false);
+    }
   }
 
   /**
@@ -67,7 +118,10 @@ function NewPlaceForm() {
    */
   function openMulti() {
     if (rows.length === 0) {
-      setRows([{ name: name.trim(), memo: '', checked: true }, { name: '', memo: '', checked: true }]);
+      setRows([
+        { name: name.trim(), memo: '', checked: true, photo: null },
+        { name: '', memo: '', checked: true, photo: null },
+      ]);
     }
     setMulti(true);
   }
@@ -100,6 +154,15 @@ function NewPlaceForm() {
       const result = await res.json();
 
       if (multi) {
+        // 응답의 places 는 보낸 items 와 같은 순서다. 줄에 붙인 사진을 그 줄의 항목에 올린다.
+        const created: Array<{ id: string }> = result.places ?? [];
+        await Promise.all(
+          picked.map((row, i) =>
+            row.photo && created[i]
+              ? uploadStaged([row.photo], created[i].id, 'reference')
+              : Promise.resolve()
+          )
+        );
         router.push(kind === 'item' ? '/?tab=items' : '/?tab=wishlist');
       } else {
         await uploadStaged(shots, result.id, 'reference');
@@ -146,7 +209,8 @@ function NewPlaceForm() {
               </button>
             </div>
             <p className="mt-1 text-xs text-neutral-400">
-              등록할 것만 체크하세요. 이름은 눌러서 고칠 수 있어요.
+              등록할 것만 체크하세요. 이름은 눌러서 고칠 수 있어요. 사진은 줄마다 한 장씩
+              붙습니다.
             </p>
 
             <div className="mt-2 space-y-2">
@@ -166,6 +230,27 @@ function NewPlaceForm() {
                       onChange={(e) => updateRow(i, { checked: e.target.checked })}
                       className="size-4 shrink-0 accent-neutral-900 dark:accent-white"
                     />
+                    <button
+                      type="button"
+                      disabled={staging}
+                      onClick={() => {
+                        rowPhotoTarget.current = i;
+                        rowPhotoRef.current?.click();
+                      }}
+                      aria-label={row.photo ? '이 줄의 사진 바꾸기' : '이 줄에 사진 붙이기'}
+                      className="size-11 shrink-0 overflow-hidden rounded-lg border border-dashed border-neutral-300 text-neutral-400 disabled:opacity-50 dark:border-neutral-700"
+                    >
+                      {row.photo ? (
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
+                          src={row.photo.previewUrl}
+                          alt=""
+                          className="size-full object-cover"
+                        />
+                      ) : (
+                        '＋'
+                      )}
+                    </button>
                     <input
                       value={row.name}
                       onChange={(e) => updateRow(i, { name: e.target.value })}
@@ -182,7 +267,7 @@ function NewPlaceForm() {
                     </button>
                   </div>
                   {row.memo && (
-                    <p className="mt-1.5 line-clamp-2 pl-6 text-xs whitespace-pre-wrap text-neutral-400">
+                    <p className="mt-1.5 line-clamp-2 pl-[4.25rem] text-xs whitespace-pre-wrap text-neutral-400">
                       {row.memo}
                     </p>
                   )}
@@ -190,13 +275,58 @@ function NewPlaceForm() {
               ))}
             </div>
 
-            <button
-              type="button"
-              onClick={addRow}
-              className="mt-2 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
-            >
-              ＋ 줄 추가
-            </button>
+            <div className="mt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={addRow}
+                className="flex-1 rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+              >
+                ＋ 줄 추가
+              </button>
+              <button
+                type="button"
+                disabled={staging}
+                onClick={() => addPhotosRef.current?.click()}
+                className="flex-1 rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm text-neutral-500 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-400"
+              >
+                {staging ? '사진 읽는 중…' : '＋ 사진으로 줄 추가'}
+              </button>
+            </div>
+
+            {unnamed > 0 && (
+              <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
+                이름이 빈 줄 {unnamed}개는 저장되지 않아요. 사진을 보고 이름을 적어주세요.
+              </p>
+            )}
+
+            {/* 여러 장 → 사진 수만큼 줄이 생긴다 */}
+            <input
+              ref={addPhotosRef}
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={(e) => {
+                // value 를 비우면 e.target.files 도 같이 비므로 먼저 복사한다.
+                const files = Array.from(e.target.files ?? []);
+                e.target.value = '';
+                void addRowsFromPhotos(files);
+              }}
+              className="hidden"
+            />
+            {/* 한 장 → 눌러둔 줄의 사진만 바꾼다 */}
+            <input
+              ref={rowPhotoRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const target = rowPhotoTarget.current;
+                const file = e.target.files?.[0];
+                rowPhotoTarget.current = null;
+                e.target.value = '';
+                if (target !== null) void setRowPhoto(target, file);
+              }}
+              className="hidden"
+            />
           </div>
         ) : (
           <>
@@ -232,7 +362,7 @@ function NewPlaceForm() {
         {multi ? (
           <p className="text-xs text-neutral-400">
             {kind === 'item' ? '종류·우선순위' : '지역·종류·우선순위'}는 {picked.length}개에 함께
-            적용돼요. 메모는 항목별로 저장됩니다.
+            적용돼요. 메모와 사진은 항목별로 저장됩니다.
           </p>
         ) : (
           <>
