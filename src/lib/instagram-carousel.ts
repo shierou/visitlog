@@ -42,16 +42,31 @@ export function extractCarouselImages(html: string): string[] {
   return urls;
 }
 
+/**
+ * 게시물 주소에서 임베드 주소를 만든다.
+ *
+ * 인스타의 "링크 복사"는 `/<사용자명>/p/<코드>/` 형태를 준다. 이 경로로 임베드를
+ * 요청하면 슬라이드 JSON 이 없는 껍데기가 오므로 반드시 `/p/<코드>/embed/` 로 줄인다.
+ * 이것 때문에 한동안 배포에서만 실패했다 — 손으로 테스트할 땐 줄인 주소만 썼었다.
+ */
+export function embedUrlFor(postUrl: string): string | null {
+  try {
+    const { pathname } = new URL(postUrl);
+    const m = pathname.match(/\/(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/u);
+    return m ? `https://www.instagram.com/${m[1]}/${m[2]}/embed/` : null;
+  } catch {
+    return null;
+  }
+}
+
 /** 퍼머링크 → 슬라이드 이미지 주소들. 캐러셀이 아니거나 실패하면 빈 배열. */
 export async function fetchCarouselImages(postUrl: string | null | undefined): Promise<string[]> {
   // 인스타 게시물 주소만. 아무 URL 이나 서버가 대신 긁게 두지 않는다.
   if (!postUrl || !isInstagramPostUrl(postUrl)) return [];
+  const embedUrl = embedUrlFor(postUrl);
+  if (!embedUrl) return [];
 
   try {
-    const url = new URL(postUrl);
-    const path = url.pathname.replace(/\/+$/u, '');
-    const embedUrl = `https://www.instagram.com${path}/embed/`;
-
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
     try {

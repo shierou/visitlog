@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { extractCarouselImages } from '@/lib/instagram-carousel';
+import {
+  fetchCarouselImages,
+  mediaIdFromAttachmentUrl,
+  resolvePostUrl,
+} from '@/lib/instagram-carousel';
+import { db, CURRENT_OWNER } from '@/lib/db';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -53,26 +58,42 @@ export async function GET() {
   results.push(await probe('embed+browserUA', `${POST}embed/`, BROWSER_UA));
   results.push(await probe('childRedirect+simpleUA', CHILD, 'visitlog/1.0'));
 
-  // 추출기가 이 본문에서 실제로 몇 장을 뽑는지, 원문이 어떤 꼴인지 그대로 본다.
-  let extraction: Record<string, unknown> = {};
+  // 사용자명이 붙은 "링크 복사" 형태도 되는지 (이게 실제 실패 원인이었다)
+  const usernameForm = await fetchCarouselImages(
+    'https://www.instagram.com/smeller_news/p/Db0TzQAk0w9/'
+  );
+
+  // 완전 자동 경로: 실제 수집함 항목의 첨부에서 게시물을 역산해 슬라이드까지 가는가.
+  // 개인정보는 담지 않는다 — 있는지 여부와 장수만 본다.
+  let autoPath: Record<string, unknown> = {};
   try {
-    const res = await fetch(`${POST}embed/`, {
-      headers: { 'user-agent': BROWSER_UA },
-      cache: 'no-store',
+    const item = await db.instagramImport.findFirst({
+      where: { ownerId: CURRENT_OWNER, status: 'pending' },
+      orderBy: { receivedAt: 'desc' },
+      select: { sourceUrl: true, mediaUrls: true },
     });
-    const body = await res.text();
-    const at = body.indexOf('display_url');
-    extraction = {
-      extracted: extractCarouselImages(body).length,
-      sample: at === -1 ? null : body.slice(Math.max(0, at - 30), at + 170),
-    };
+    if (!item) {
+      autoPath = { note: 'pending 항목 없음' };
+    } else {
+      const first = item.mediaUrls[0] ?? null;
+      const resolved = item.sourceUrl ?? (first ? await resolvePostUrl(first) : null);
+      autoPath = {
+        hasSourceUrl: Boolean(item.sourceUrl),
+        mediaCount: item.mediaUrls.length,
+        attachmentHost: first ? new URL(first).host : null,
+        hasAssetId: first ? Boolean(mediaIdFromAttachmentUrl(first)) : false,
+        resolvedPath: resolved ? new URL(resolved).pathname : null,
+        slides: resolved ? (await fetchCarouselImages(resolved)).length : 0,
+      };
+    }
   } catch (error) {
-    extraction = { error: String(error) };
+    autoPath = { error: String(error) };
   }
 
   return NextResponse.json({
     region: process.env.VERCEL_REGION ?? null,
     results,
-    extraction,
+    usernameFormSlides: usernameForm.length,
+    autoPath,
   });
 }

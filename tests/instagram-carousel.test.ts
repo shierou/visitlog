@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  embedUrlFor,
   extractCarouselImages,
   mediaIdFromAttachmentUrl,
   shortcodeFromMediaId,
@@ -49,4 +50,22 @@ test('pulls the asset id out of a messaging CDN url', () => {
   );
   assert.equal(mediaIdFromAttachmentUrl('https://lookaside.fbsbx.com/other'), null);
   assert.equal(mediaIdFromAttachmentUrl('not a url'), null);
+});
+
+// 인스타 "링크 복사"는 /<사용자명>/p/<코드>/ 를 준다. 그 경로로 임베드를 요청하면
+// 슬라이드 JSON 없는 껍데기가 와서, 배포 환경에서만 조용히 실패했었다.
+test('canonicalizes embed URLs, dropping the username segment', () => {
+  const want = 'https://www.instagram.com/p/Db0TzQAk0w9/embed/';
+  assert.equal(embedUrlFor('https://www.instagram.com/smeller_news/p/Db0TzQAk0w9/'), want);
+  assert.equal(embedUrlFor('https://www.instagram.com/p/Db0TzQAk0w9/'), want);
+  assert.equal(embedUrlFor('https://instagram.com/p/Db0TzQAk0w9/?igsh=abc123'), want);
+
+  // 릴스는 타입 세그먼트를 유지한다
+  assert.equal(
+    embedUrlFor('https://www.instagram.com/someone/reel/ABC123/'),
+    'https://www.instagram.com/reel/ABC123/embed/'
+  );
+
+  assert.equal(embedUrlFor('https://www.instagram.com/smeller_news/'), null);
+  assert.equal(embedUrlFor('not a url'), null);
 });
