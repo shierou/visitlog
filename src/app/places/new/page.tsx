@@ -92,9 +92,22 @@ function NewPlaceForm() {
 
   // 링크 칸의 게시물 주소에서 슬라이드를 불러오는 중인가
   const [loadingSlides, setLoadingSlides] = useState(false);
+  const slidesTriedFor = useRef<string | null>(null);
 
-  /** 링크 칸에 붙여넣은 게시물 주소에서 캐러셀 슬라이드 전체를 가져온다. */
-  async function loadSlidesFromLink() {
+  useEffect(() => {
+    if (!multi || images.length > 1 || !isInstagramPostUrl(sourceUrl)) return;
+    if (slidesTriedFor.current === sourceUrl) return;
+    slidesTriedFor.current = sourceUrl;
+    void loadSlidesFromLink(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceUrl, multi, images.length]);
+
+  /**
+   * 링크 칸에 붙여넣은 게시물 주소에서 캐러셀 슬라이드 전체를 가져온다.
+   * 붙여넣는 순간 자동으로도 불리므로, 그때는 실패해도 조용히 둔다 —
+   * 타이핑 중간의 주소로 알림창을 띄우면 성가시다. 버튼으로 다시 누르면 알려준다.
+   */
+  async function loadSlidesFromLink(silent = false) {
     if (loadingSlides || !isInstagramPostUrl(sourceUrl)) return;
     setLoadingSlides(true);
     try {
@@ -105,12 +118,12 @@ function NewPlaceForm() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !Array.isArray(data?.images)) {
-        alert(data?.error ?? '슬라이드를 가져오지 못했어요');
+        if (!silent) alert(data?.error ?? '슬라이드를 가져오지 못했어요');
         return;
       }
       applyImages(data.images);
     } catch {
-      alert('슬라이드를 가져오지 못했어요');
+      if (!silent) alert('슬라이드를 가져오지 못했어요');
     } finally {
       setLoadingSlides(false);
     }
@@ -376,8 +389,8 @@ function NewPlaceForm() {
               /* DM 공유는 표지 한 장만 온다. 슬라이드는 게시물 링크의 임베드에서 가져온다. */
               <div className="mt-1">
                 <p className="text-xs text-amber-600 dark:text-amber-500">
-                  DM에 담겨온 이미지는 표지뿐이에요. 아래 링크 칸에 게시물 주소를 붙여넣고
-                  슬라이드를 불러오면 항목마다 사진이 붙어요.
+                  DM에 담겨온 이미지는 표지뿐이에요. 아래 링크 칸에 게시물 주소를
+                  붙여넣으면 슬라이드를 자동으로 불러와 항목마다 붙여드려요.
                 </p>
                 {isInstagramPostUrl(sourceUrl) && (
                   <button
