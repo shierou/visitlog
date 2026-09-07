@@ -16,21 +16,27 @@ export async function GET(_req: NextRequest, { params }: Context) {
   });
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  // 퍼머링크가 안 왔으면 첨부의 asset_id 로 게시물을 역산한다.
-  // 찾으면 저장해둔다 — 수집함 카드의 "원본 열기"도 살아나고 다음엔 역산이 필요 없다.
+  // 퍼머링크가 있으면 임베드에서 슬라이드 전체를 가져온다. DM 첨부는 표지
+  // 한 장뿐인 경우가 대부분이라, 여기서 확장해야 항목별 짝짓기가 가능해진다.
   let sourceUrl = item.sourceUrl;
+  let carousel = await fetchCarouselImages(sourceUrl);
+
+  // 퍼머링크가 안 왔으면 첨부의 asset_id 로 게시물을 역산해본다.
+  // 역산이 늘 맞지는 않는다 — 없는 코드가 나와도 인스타가 200 을 주기 때문에,
+  // 슬라이드가 실제로 나올 때만 진짜 게시물로 인정한다. 틀린 주소를 저장하면
+  // "원본 열기" 가 죽은 링크가 되므로 검증 전에는 쓰지 않는다.
   if (!sourceUrl && item.mediaUrls[0]) {
-    sourceUrl = await resolvePostUrl(item.mediaUrls[0]);
-    if (sourceUrl) {
+    const guess = await resolvePostUrl(item.mediaUrls[0]);
+    const slides = guess ? await fetchCarouselImages(guess) : [];
+    if (guess && slides.length > 1) {
+      sourceUrl = guess;
+      carousel = slides;
+      // 다음부터는 역산이 필요 없고, 수집함의 "원본 열기" 도 살아난다.
       await db.instagramImport
         .update({ where: { id: item.id }, data: { sourceUrl } })
         .catch(() => {});
     }
   }
-
-  // 퍼머링크가 있으면 임베드에서 슬라이드 전체를 가져온다. DM 첨부는 표지
-  // 한 장뿐인 경우가 대부분이라, 여기서 확장해야 항목별 짝짓기가 가능해진다.
-  const carousel = await fetchCarouselImages(sourceUrl);
   return NextResponse.json({
     ...item,
     sourceUrl,

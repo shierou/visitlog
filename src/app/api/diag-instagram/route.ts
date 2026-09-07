@@ -67,25 +67,24 @@ export async function GET() {
   // 개인정보는 담지 않는다 — 있는지 여부와 장수만 본다.
   let autoPath: Record<string, unknown> = {};
   try {
-    const item = await db.instagramImport.findFirst({
+    const items = await db.instagramImport.findMany({
       where: { ownerId: CURRENT_OWNER, status: 'pending' },
       orderBy: { receivedAt: 'desc' },
       select: { sourceUrl: true, mediaUrls: true },
     });
-    if (!item) {
-      autoPath = { note: 'pending 항목 없음' };
-    } else {
-      const first = item.mediaUrls[0] ?? null;
-      const resolved = item.sourceUrl ?? (first ? await resolvePostUrl(first) : null);
-      autoPath = {
-        hasSourceUrl: Boolean(item.sourceUrl),
-        mediaCount: item.mediaUrls.length,
-        attachmentHost: first ? new URL(first).host : null,
-        hasAssetId: first ? Boolean(mediaIdFromAttachmentUrl(first)) : false,
-        resolvedPath: resolved ? new URL(resolved).pathname : null,
-        slides: resolved ? (await fetchCarouselImages(resolved)).length : 0,
-      };
-    }
+    autoPath = await Promise.all(
+      items.map(async (item) => {
+        const first = item.mediaUrls[0] ?? null;
+        const assetId = first ? mediaIdFromAttachmentUrl(first) : null;
+        const resolved = item.sourceUrl ?? (first ? await resolvePostUrl(first) : null);
+        return {
+          hasSourceUrl: Boolean(item.sourceUrl),
+          assetId,
+          resolvedPath: resolved ? new URL(resolved).pathname : null,
+          slides: resolved ? (await fetchCarouselImages(resolved)).length : 0,
+        };
+      })
+    ) as unknown as Record<string, unknown>;
   } catch (error) {
     autoPath = { error: String(error) };
   }
