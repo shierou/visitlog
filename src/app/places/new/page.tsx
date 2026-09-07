@@ -7,6 +7,7 @@ import PhotoPicker, { stageFiles, uploadStaged, type Staged } from '@/components
 import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
+import { applyExtract, type VisionExtract } from '@/lib/vision-autofill';
 import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
 
 /**
@@ -86,6 +87,8 @@ function NewPlaceForm() {
   }
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
+  // 슬라이드 이미지를 읽어 이름·메모를 채우는 중인가
+  const [reading, setReading] = useState(false);
   // 사진을 리사이즈·압축하는 동안 같은 파일을 두 번 밀어 넣지 않게 막는다.
   const [staging, setStaging] = useState(false);
 
@@ -153,6 +156,71 @@ function NewPlaceForm() {
       updateRow(index, { photo });
     } finally {
       setStaging(false);
+    }
+  }
+
+  function fileToBase64(file: File): Promise<{ base64: string; mediaType: string }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const [head, data] = String(reader.result).split(',');
+        resolve({ base64: data, mediaType: head.match(/data:([^;]+)/)?.[1] ?? file.type });
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** 이 줄에 붙은 이미지로 이름·메모를 채울 수 있는가 */
+  function readable(row: Row): boolean {
+    const hasImage =
+      Boolean(row.photo) ||
+      (row.imageIndex !== null && row.imageIndex !== undefined && Boolean(images[row.imageIndex]));
+    return row.checked && hasImage && (!row.name.trim() || !row.memo.trim());
+  }
+
+  /**
+   * 줄에 붙은 슬라이드 이미지를 서버 비전 API 로 읽어 빈 이름·메모를 채운다.
+   * 줄마다 병렬로 부르므로 전체 시간은 한 장 읽는 시간과 비슷하다.
+   * 사용자가 이미 적은 값은 applyExtract 가 건드리지 않는다.
+   */
+  async function readFromImages() {
+    if (reading) return;
+    const targets = rows.map((row, i) => ({ row, i })).filter(({ row }) => readable(row));
+    if (targets.length === 0) return;
+    setReading(true);
+    let filled = 0;
+    let firstError = '';
+    try {
+      await Promise.all(
+        targets.map(async ({ row, i }) => {
+          try {
+            const image = row.photo
+              ? await fileToBase64(row.photo.file)
+              : { url: images[row.imageIndex!] };
+            const res = await fetch('/api/vision-autofill', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ image, kind }),
+            });
+            if (!res.ok) {
+              firstError ||= (await res.json().catch(() => null))?.error ?? '읽기에 실패했어요';
+              return;
+            }
+            const extracted: VisionExtract = await res.json();
+            const patch = applyExtract({ name: row.name, memo: row.memo }, extracted);
+            if (Object.keys(patch).length) {
+              filled += 1;
+              updateRow(i, patch);
+            }
+          } catch {
+            firstError ||= '읽기에 실패했어요';
+          }
+        })
+      );
+      if (filled === 0 && firstError) alert(firstError);
+    } finally {
+      setReading(false);
     }
   }
 
@@ -367,6 +435,17 @@ function NewPlaceForm() {
                 {staging ? '사진 읽는 중…' : '＋ 사진으로 줄 추가'}
               </button>
             </div>
+
+            {rows.some(readable) && (
+              <button
+                type="button"
+                disabled={reading}
+                onClick={() => void readFromImages()}
+                className="mt-2 w-full rounded-xl bg-neutral-100 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300"
+              >
+                {reading ? '사진 읽는 중…' : '✨ 사진에서 이름·정보 읽어오기'}
+              </button>
+            )}
 
             {unnamed > 0 && (
               <p className="mt-2 text-xs text-amber-600 dark:text-amber-500">
