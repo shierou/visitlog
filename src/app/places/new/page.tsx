@@ -8,7 +8,7 @@ import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/componen
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
 import { applyExtract, type VisionExtract } from '@/lib/vision-autofill';
-import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
+import { canFetchThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
 
 /**
  * 여러 개로 나눠 등록할 때의 한 줄.
@@ -60,13 +60,7 @@ function NewPlaceForm() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!alive || !Array.isArray(data?.mediaUrls)) return;
-        const urls: string[] = data.mediaUrls;
-        setImages(urls);
-        // 항목 수와 이미지 수가 정확히 같을 때만 순서대로 짝지어준다.
-        // 다르면 어느 이미지가 어느 항목인지 알 수 없으므로 사용자가 행마다 고른다.
-        setRows((prev) =>
-          prev.length === urls.length ? prev.map((r, i) => ({ ...r, imageIndex: i })) : prev
-        );
+        applyImages(data.mediaUrls);
       })
       .catch(() => {});
     return () => {
@@ -74,6 +68,53 @@ function NewPlaceForm() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importId]);
+
+  /**
+   * 이미지 목록을 받아 행에 짝지어준다.
+   *   개수가 정확히 같으면 → 순서대로
+   *   이미지가 1~2장 많으면 → 표지(첫 장)를 건너뛰고 순서대로. 큐레이션 캐러셀은
+   *     대개 "표지 + 제품 슬라이드들 (+ 아웃트로)" 구성이라 이 어긋남이 정확히 표지 몫이다.
+   *   그 외 → 짝짓지 않는다. 어느 이미지가 어느 항목인지 알 수 없고,
+   *     엉뚱한 사진은 없는 것보다 나쁘다. 행마다 탭해서 직접 고른다.
+   * 어차피 화면에 보이는 초기값이라 틀리면 탭 몇 번으로 고칠 수 있다.
+   */
+  function applyImages(urls: string[]) {
+    setImages(urls);
+    setRows((prev) => {
+      const diff = urls.length - prev.length;
+      const offset = diff === 0 ? 0 : diff === 1 || diff === 2 ? 1 : null;
+      if (offset === null) return prev;
+      return prev.map((r, i) =>
+        urls[i + offset] ? { ...r, imageIndex: i + offset } : r
+      );
+    });
+  }
+
+  // 링크 칸의 게시물 주소에서 슬라이드를 불러오는 중인가
+  const [loadingSlides, setLoadingSlides] = useState(false);
+
+  /** 링크 칸에 붙여넣은 게시물 주소에서 캐러셀 슬라이드 전체를 가져온다. */
+  async function loadSlidesFromLink() {
+    if (loadingSlides || !isInstagramPostUrl(sourceUrl)) return;
+    setLoadingSlides(true);
+    try {
+      const res = await fetch('/api/instagram-images', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: sourceUrl }),
+      });
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !Array.isArray(data?.images)) {
+        alert(data?.error ?? '슬라이드를 가져오지 못했어요');
+        return;
+      }
+      applyImages(data.images);
+    } catch {
+      alert('슬라이드를 가져오지 못했어요');
+    } finally {
+      setLoadingSlides(false);
+    }
+  }
 
   /** 행의 사진을 다음 이미지로 넘긴다. 끝까지 가면 "사진 없음"을 거쳐 처음으로 돈다. */
   function cycleImage(index: number) {
@@ -331,13 +372,24 @@ function NewPlaceForm() {
               등록할 것만 체크하세요. 이름은 눌러서 고칠 수 있어요. 사진은 줄마다 한 장씩
               붙습니다.
             </p>
-            {images.length === 1 && rows.length > 1 && (
-              /* 캐러셀 공유는 표지 한 장만 온다. 나머지 슬라이드는 받을 방법이 없어서
-                 스크린샷 경로를 안내한다. */
-              <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
-                DM에 담겨온 이미지는 표지 1장뿐이에요. 슬라이드를 넘기며 찍은 스크린샷을
-                &ldquo;사진으로 줄 추가&rdquo;로 붙이면 이름·정보도 자동으로 읽어올 수 있어요.
-              </p>
+            {images.length <= 1 && rows.length > 1 && (
+              /* DM 공유는 표지 한 장만 온다. 슬라이드는 게시물 링크의 임베드에서 가져온다. */
+              <div className="mt-1">
+                <p className="text-xs text-amber-600 dark:text-amber-500">
+                  DM에 담겨온 이미지는 표지뿐이에요. 아래 링크 칸에 게시물 주소를 붙여넣고
+                  슬라이드를 불러오면 항목마다 사진이 붙어요.
+                </p>
+                {isInstagramPostUrl(sourceUrl) && (
+                  <button
+                    type="button"
+                    disabled={loadingSlides}
+                    onClick={() => void loadSlidesFromLink()}
+                    className="mt-1.5 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm text-neutral-500 disabled:opacity-50 dark:border-neutral-700 dark:text-neutral-400"
+                  >
+                    {loadingSlides ? '슬라이드 불러오는 중…' : '🖼 링크에서 슬라이드 불러오기'}
+                  </button>
+                )}
+              </div>
             )}
 
             <div className="mt-2 space-y-2">

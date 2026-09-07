@@ -75,6 +75,26 @@ async function attachImage(placeId: string, url: string): Promise<void> {
   }
 }
 
+/**
+ * 선택한 항목들을 한 번에 지운다. 수집함에서 잘못 넘어온 것들을 하나씩
+ * 상세 화면에 들어가 지우게 만들 수는 없다.
+ * 사진·방문기록은 FK cascade 로 함께 지워진다(단건 삭제와 같은 동작).
+ */
+export async function DELETE(req: NextRequest) {
+  const body = await req.json().catch(() => null);
+  const ids = Array.isArray(body?.ids)
+    ? body.ids.filter((id: unknown): id is string => typeof id === 'string' && id.length > 0)
+    : [];
+  if (ids.length === 0 || ids.length > 200) {
+    return NextResponse.json({ error: '삭제할 항목이 없거나 너무 많아요' }, { status: 400 });
+  }
+
+  const result = await db.place.deleteMany({
+    where: { id: { in: ids }, ownerId: CURRENT_OWNER },
+  });
+  return NextResponse.json({ deleted: result.count });
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const items = readItems(body);

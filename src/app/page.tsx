@@ -4,6 +4,7 @@ import { publicUrl } from '@/lib/storage';
 import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
 import { priorityMeta, normalizePriority, kindMeta } from '@/lib/taxonomy';
 import PlaceFilters from '@/components/PlaceFilters';
+import PlaceList, { type PlaceCard } from '@/components/PlaceList';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,6 +59,40 @@ export default async function Home({
     db.instagramImport.count({ where: { ownerId: CURRENT_OWNER, status: 'pending' } }),
   ]);
 
+  // 카드에 들어갈 것을 문자열로 미리 만든다. 목록 자체는 선택 모드(일괄 삭제)
+  // 때문에 클라이언트 컴포넌트라서, 직렬화 가능한 값만 넘긴다.
+  const cards: PlaceCard[] = places.map((p) => {
+    const thumb = p.media[0];
+    const last = p.visits[0];
+    const pr = priorityMeta(p.priority);
+    return {
+      id: p.id,
+      thumbUrl: thumb ? publicUrl(thumb.path) : null,
+      emptyIcon: meta.emptyIcon,
+      name: p.name,
+      badge: pr.badge || null,
+      badgeClass: pr.className,
+      category: p.category,
+      region: p.region,
+      memo: p.memo,
+      statusLine:
+        kind === 'item' && p.status === 'visited'
+          ? `✓ ${meta.doneVerb}`
+          : last
+            ? `${fmtDate(last.visitedOn)} 방문` +
+              (last.rating ? ` · ${'★'.repeat(last.rating)}` : '') +
+              (last.revisit ? ` · ${REVISIT_LABEL[last.revisit]}` : '')
+            : `저장한 지 ${daysBetween(p.createdAt, new Date())}일`,
+    };
+  });
+
+  const emptyText =
+    q || region || category || priority
+      ? '조건에 맞는 게 없어요'
+      : tab === 'visited'
+        ? '아직 다녀온 곳이 없어요'
+        : `＋ 를 눌러 ${meta.wishLabel}을 추가해보세요`;
+
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
@@ -103,84 +138,7 @@ export default async function Home({
 
       <PlaceFilters filters={{ tab, q, region, category, priority }} kind={kind} />
 
-      <ul className="space-y-2 px-4">
-        {places.map((p) => {
-          const thumb = p.media[0];
-          const last = p.visits[0];
-          const pr = priorityMeta(p.priority);
-          return (
-            <li key={p.id}>
-              <Link
-                href={`/places/${p.id}`}
-                className="flex gap-3 rounded-2xl border border-neutral-200 p-3 active:bg-neutral-50 dark:border-neutral-800 dark:active:bg-neutral-800"
-              >
-                {thumb ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={publicUrl(thumb.path)}
-                    alt=""
-                    className="h-16 w-16 shrink-0 rounded-xl object-cover"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-neutral-100 text-xl dark:bg-neutral-800">
-                    {meta.emptyIcon}
-                  </div>
-                )}
-
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    {pr.badge && (
-                      <span
-                        className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold ${pr.className}`}
-                      >
-                        {pr.badge}
-                      </span>
-                    )}
-                    <span className="truncate font-semibold">{p.name}</span>
-                    {p.category && (
-                      <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-                        {p.category}
-                      </span>
-                    )}
-                  </div>
-
-                  {p.region && (
-                    <p className="mt-0.5 text-xs text-neutral-400">📍 {p.region}</p>
-                  )}
-
-                  {p.memo && (
-                    <p className="mt-0.5 truncate text-xs text-neutral-500">{p.memo}</p>
-                  )}
-
-                  <p className="mt-1 text-xs text-neutral-400">
-                    {kind === 'item' && p.status === 'visited' ? (
-                      <>✓ {meta.doneVerb}</>
-                    ) : last ? (
-                      <>
-                        {fmtDate(last.visitedOn)} 방문
-                        {last.rating ? ` · ${'★'.repeat(last.rating)}` : ''}
-                        {last.revisit ? ` · ${REVISIT_LABEL[last.revisit]}` : ''}
-                      </>
-                    ) : (
-                      <>저장한 지 {daysBetween(p.createdAt, new Date())}일</>
-                    )}
-                  </p>
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-
-        {places.length === 0 && (
-          <li className="py-20 text-center text-sm text-neutral-400">
-            {q || region || category || priority
-              ? '조건에 맞는 게 없어요'
-              : tab === 'visited'
-                ? '아직 다녀온 곳이 없어요'
-                : `＋ 를 눌러 ${meta.wishLabel}을 추가해보세요`}
-          </li>
-        )}
-      </ul>
+      <PlaceList items={cards} emptyText={emptyText} />
 
       <Link
         href="/places/new"
