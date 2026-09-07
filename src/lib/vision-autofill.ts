@@ -18,8 +18,16 @@ export type VisionExtract = {
 };
 
 /**
+ * 인스타 계정 핸들처럼 생긴 이름인가. 멘션 목록에서 줄을 만들면 이름이
+ * 'jomalonelondon' 같은 핸들로 깔리는데, 이건 사람이 적은 이름이 아니라
+ * 자리표시자다. 제품명을 읽어냈으면 바꿔주는 게 맞다.
+ */
+const HANDLE_LIKE = /^[a-z0-9._]{2,30}$/i;
+
+/**
  * 추출 결과를 줄에 반영한다. 사용자가 이미 적은 값은 절대 덮지 않는다 —
  * 자동 채움이 손으로 고친 것을 지우면 기능을 끄고 싶어진다.
+ * 예외는 핸들 꼴 자리표시자 이름뿐이다.
  */
 export function applyExtract(
   current: { name: string; memo: string },
@@ -29,7 +37,7 @@ export function applyExtract(
 
   const patch: { name?: string; memo?: string } = {};
 
-  if (!current.name.trim()) {
+  if (!current.name.trim() || HANDLE_LIKE.test(current.name.trim())) {
     // "브랜드 제품명" 꼴. 둘 중 하나만 있어도 그걸 쓴다.
     const name = [extracted.brand, extracted.name]
       .map((v) => v?.trim())

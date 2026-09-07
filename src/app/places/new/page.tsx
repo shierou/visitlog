@@ -60,6 +60,10 @@ function NewPlaceForm() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!alive || !Array.isArray(data?.mediaUrls)) return;
+        // 서버가 첨부에서 역산해준 퍼머링크. 비어 있을 때만 채운다.
+        if (typeof data.sourceUrl === 'string' && data.sourceUrl) {
+          setSourceUrl((prev) => prev || data.sourceUrl);
+        }
         applyImages(data.mediaUrls);
       })
       .catch(() => {});
@@ -80,6 +84,9 @@ function NewPlaceForm() {
    */
   function applyImages(urls: string[]) {
     setImages(urls);
+    // 짝짓기가 끝나면 이름·정보 읽기도 이어서 돌린다. 수집함에서 "등록"만 누르면
+    // 끝나야 하니까. rows 상태가 반영된 다음이어야 해서 effect 로 넘긴다.
+    setAutoRead(true);
     setRows((prev) => {
       const diff = urls.length - prev.length;
       const offset = diff === 0 ? 0 : diff === 1 || diff === 2 ? 1 : null;
@@ -143,6 +150,16 @@ function NewPlaceForm() {
   const [saving, setSaving] = useState(false);
   // 슬라이드 이미지를 읽어 이름·메모를 채우는 중인가
   const [reading, setReading] = useState(false);
+  // 슬라이드가 방금 짝지어져서 자동 읽기가 예약됐는가
+  const [autoRead, setAutoRead] = useState(false);
+
+  useEffect(() => {
+    if (!autoRead || reading) return;
+    setAutoRead(false);
+    // 자동 실행은 조용히 — 키가 없거나 실패하면 버튼이 남아 있으니 거기서 알린다.
+    void readFromImages(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRead, reading]);
   // 사진을 리사이즈·압축하는 동안 같은 파일을 두 번 밀어 넣지 않게 막는다.
   const [staging, setStaging] = useState(false);
 
@@ -238,7 +255,7 @@ function NewPlaceForm() {
    * 줄마다 병렬로 부르므로 전체 시간은 한 장 읽는 시간과 비슷하다.
    * 사용자가 이미 적은 값은 applyExtract 가 건드리지 않는다.
    */
-  async function readFromImages() {
+  async function readFromImages(silent = false) {
     if (reading) return;
     const targets = rows.map((row, i) => ({ row, i })).filter(({ row }) => readable(row));
     if (targets.length === 0) return;
@@ -272,7 +289,7 @@ function NewPlaceForm() {
           }
         })
       );
-      if (filled === 0 && firstError) alert(firstError);
+      if (!silent && filled === 0 && firstError) alert(firstError);
     } finally {
       setReading(false);
     }

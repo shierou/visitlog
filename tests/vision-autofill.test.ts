@@ -27,6 +27,25 @@ test('never overwrites what the user already typed', () => {
   );
 });
 
+// 멘션 목록에서 만들어진 줄은 이름이 계정 핸들이다. 사람이 적은 이름이 아니라
+// 자리표시자라서, 제품명을 읽어냈으면 바꿔준다.
+test('replaces handle-like placeholder names with the extracted product', () => {
+  const patch = applyExtract(
+    { name: 'jomalonelondon', memo: '' },
+    { found: true, name: '우드세이지 앤 씨 솔트', brand: '조 말론 런던', memo: '아로마틱 · 쏠티' }
+  );
+  assert.deepEqual(patch, { name: '조 말론 런던 우드세이지 앤 씨 솔트', memo: '아로마틱 · 쏠티' });
+
+  // 한글이 섞였거나 공백이 있으면 사람이 적은 이름이다. 건드리지 않는다.
+  assert.deepEqual(
+    applyExtract(
+      { name: '조말론 향수', memo: '' },
+      { found: true, name: 'x', brand: 'y', memo: null }
+    ),
+    {}
+  );
+});
+
 test('does nothing for cover or outro slides', () => {
   assert.deepEqual(
     applyExtract({ name: '', memo: '' }, { found: false, name: null, brand: null, memo: null }),

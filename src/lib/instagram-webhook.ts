@@ -62,7 +62,7 @@ function extractUrls(value: string): string[] {
   );
 }
 
-function normalizeInstagramPostUrl(value: string): string | null {
+export function normalizeInstagramPostUrl(value: string): string | null {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:') return null;

@@ -11,6 +11,7 @@
 
 // node --test 가 확장자 없는 상대 경로를 못 찾는다 (autofill.ts 와 같은 이유).
 import { isInstagramPostUrl } from './instagram-thumbnail.ts';
+import { normalizeInstagramPostUrl } from './instagram-webhook.ts';
 
 const EMBED_TIMEOUT_MS = 8000;
 const MAX_SLIDES = 20;
@@ -67,5 +68,72 @@ export async function fetchCarouselImages(postUrl: string | null | undefined): P
   } catch {
     // 타임아웃·네트워크·차단. 슬라이드는 부가 기능이라 조용히 포기한다.
     return [];
+  }
+}
+
+/* ── 첨부 CDN 주소에서 게시물 퍼머링크 역산 ──────────────────────
+ *
+ * DM 첨부 주소(lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=...)의 asset_id 는
+ * 첨부된 미디어(대개 캐러셀 표지)의 숫자 ID 다. 게시물 코드는 미디어 ID 를
+ * base64(인스타 알파벳)로 인코딩한 것이라 역산할 수 있고, 표지처럼 자식
+ * 미디어의 코드로 접근해도 인스타가 부모 게시물로 리다이렉트해준다.
+ * 덕분에 퍼머링크 없이 온 공유도 게시물을 찾아낼 수 있다.
+ */
+
+const SHORTCODE_ALPHABET =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+
+/** 숫자 미디어 ID → 게시물 코드. 인스타 ID 범위를 벗어나면 null. */
+export function shortcodeFromMediaId(id: string): string | null {
+  if (!/^\d{15,20}$/u.test(id)) return null;
+  let n = BigInt(id);
+  let code = '';
+  while (n > 0n) {
+    code = SHORTCODE_ALPHABET[Number(n % 64n)] + code;
+    n /= 64n;
+  }
+  return code || null;
+}
+
+/** 첨부 CDN 주소에서 asset_id 를 뽑는다. 없으면 null. */
+export function mediaIdFromAttachmentUrl(mediaUrl: string): string | null {
+  try {
+    const url = new URL(mediaUrl);
+    const id = url.searchParams.get('asset_id');
+    return id && /^\d{15,20}$/u.test(id) ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 첨부 CDN 주소 → 게시물 퍼머링크. 리다이렉트를 따라간 최종 주소가 답이다.
+ * (자식 코드 → 부모 게시물 리다이렉트가 여기서 일어난다)
+ * 실패하면 null — 호출부는 퍼머링크 없던 원래 상태로 동작하면 된다.
+ *
+ * 여기서는 일부러 단순 클라이언트 UA 를 쓴다. 브라우저 UA 에는 리다이렉트 대신
+ * SPA 껍데기(200)를 돌려줘서 최종 주소를 알 수 없다. 임베드 쪽과 반대라는 점에 주의.
+ */
+export async function resolvePostUrl(mediaUrl: string): Promise<string | null> {
+  const mediaId = mediaIdFromAttachmentUrl(mediaUrl);
+  const code = mediaId ? shortcodeFromMediaId(mediaId) : null;
+  if (!code) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+  try {
+    const page = await fetch(`https://www.instagram.com/p/${code}/`, {
+      headers: { 'user-agent': 'visitlog/1.0' },
+      signal: controller.signal,
+      redirect: 'follow',
+    });
+    // 본문은 필요 없다. 최종 URL 만 가진다.
+    await page.body?.cancel();
+    if (!page.ok) return null;
+    return normalizeInstagramPostUrl(page.url);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
