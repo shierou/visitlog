@@ -7,7 +7,9 @@ import ReferencePhotos from '@/components/ReferencePhotos';
 import { DeletePlaceButton, DeleteVisitButton } from '@/components/DangerActions';
 import PlaceMetaEditor from '@/components/PlaceMetaEditor';
 import BoughtToggle from '@/components/BoughtToggle';
+import FetchThumbnailButton from '@/components/FetchThumbnailButton';
 import { priorityMeta, kindMeta } from '@/lib/taxonomy';
+import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
 
 export const dynamic = 'force-dynamic';
 
@@ -86,6 +88,11 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
       />
 
       <ReferencePhotos placeId={place.id} items={refs} urls={urls} />
+
+      {/* 저장 때 못 받아왔거나 규칙이 바뀌기 전에 등록한 항목을 위한 재시도 */}
+      {refs.length === 0 && canFetchThumbnail(place.sourceUrl) && (
+        <FetchThumbnailButton placeId={place.id} />
+      )}
 
       <div className="px-4 pb-2">
         {/* 물건은 방문 기록 대신 샀는지 여부만 있으면 된다. */}

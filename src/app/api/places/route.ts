@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { normalizePriority, normalizeKind } from '@/lib/taxonomy';
-import { fetchInstagramThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
+import { fetchInstagramThumbnail, canFetchThumbnail } from '@/lib/instagram-thumbnail';
 import { saveFile } from '@/lib/storage';
 
 export async function GET(req: NextRequest) {
@@ -104,7 +104,7 @@ export async function POST(req: NextRequest) {
   // 여러 곳을 한 번에 만든 경우는 붙이지 않는다. 게시물 표지 한 장이
   // 다섯 곳 모두의 사진인 척하게 되고, 엉뚱한 사진은 없는 것보다 나쁘다.
   const single = places.length === 1 ? places[0] : null;
-  if (single?.sourceUrl && isInstagramPostUrl(single.sourceUrl)) {
+  if (single?.sourceUrl && canFetchThumbnail(single.sourceUrl)) {
     try {
       const thumbnail = await fetchInstagramThumbnail(single.sourceUrl);
       if (thumbnail) {

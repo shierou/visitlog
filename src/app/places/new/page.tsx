@@ -7,6 +7,7 @@ import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker
 import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitNumberedPlaces } from '@/lib/autofill';
+import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
 
 type Row = { name: string; memo: string; checked: boolean };
 
@@ -214,7 +215,7 @@ function NewPlaceForm() {
             <PhotoPicker
               label="인스타 스크린샷"
               hint={
-                sourceUrl.includes('instagram.com')
+                canFetchThumbnail(sourceUrl)
                   ? '저장하면 대표 이미지가 자동으로 들어가요'
                   : '여러 장 가능'
               }

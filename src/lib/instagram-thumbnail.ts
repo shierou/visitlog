@@ -14,18 +14,43 @@ const IMAGE_TIMEOUT_MS = 8000;
 const MAX_IMAGE_BYTES = 8_000_000;
 const POST_PATH = /^\/(?:[^/]+\/)?(?:p|reel|reels|tv)\/[^/]+/iu;
 
-/** 인스타 게시물 주소인지. 아무 URL 이나 서버가 대신 긁어주지 않도록 좁힌다. */
-export function isInstagramPostUrl(value: string | null | undefined): boolean {
-  if (!value) return false;
+/**
+ * Meta 가 퍼머링크 대신 첨부 미디어 주소만 주는 경우가 있다.
+ * (릴스는 대개 퍼머링크가 오지만, 피드 게시물 공유는 이 CDN 주소만 오는 일이 잦다)
+ * 그 주소가 곧 이미지라서 og:image 를 거칠 필요 없이 바로 받는다.
+ */
+const MEDIA_CDN_HOSTS = ['lookaside.fbsbx.com', 'cdninstagram.com', 'fbcdn.net'];
+
+function parseHttps(value: string | null | undefined): URL | null {
+  if (!value) return null;
   try {
     const url = new URL(value);
-    if (url.protocol !== 'https:') return false;
-    const host = url.hostname.toLowerCase().replace(/^www\./u, '');
-    if (host !== 'instagram.com' && !host.endsWith('.instagram.com')) return false;
-    return POST_PATH.test(url.pathname);
+    return url.protocol === 'https:' ? url : null;
   } catch {
-    return false;
+    return null;
   }
+}
+
+/** 인스타 게시물 주소인지. 아무 URL 이나 서버가 대신 긁어주지 않도록 좁힌다. */
+export function isInstagramPostUrl(value: string | null | undefined): boolean {
+  const url = parseHttps(value);
+  if (!url) return false;
+  const host = url.hostname.toLowerCase().replace(/^www\./u, '');
+  if (host !== 'instagram.com' && !host.endsWith('.instagram.com')) return false;
+  return POST_PATH.test(url.pathname);
+}
+
+/** Meta 가 준 첨부 미디어 CDN 주소인지. 호스트를 못 박아 SSRF 를 막는다. */
+export function isInstagramMediaUrl(value: string | null | undefined): boolean {
+  const url = parseHttps(value);
+  if (!url) return false;
+  const host = url.hostname.toLowerCase();
+  return MEDIA_CDN_HOSTS.some((h) => host === h || host.endsWith(`.${h}`));
+}
+
+/** 썸네일을 시도해볼 만한 주소인지 */
+export function canFetchThumbnail(value: string | null | undefined): boolean {
+  return isInstagramPostUrl(value) || isInstagramMediaUrl(value);
 }
 
 /** HTML 에서 og:image 값을 뽑는다. 속성 순서가 뒤집힌 경우도 있어서 둘 다 본다. */
@@ -58,15 +83,40 @@ async function fetchWithTimeout(url: string, ms: number, headers: Record<string,
   }
 }
 
-/**
- * 대표 이미지를 File 로 돌려준다. 실패하면 null — 장소 저장 자체를 막지 않는다.
- * 호출부는 이 값이 없을 수 있다는 전제로 써야 한다.
- */
-export async function fetchInstagramThumbnail(postUrl: string): Promise<File | null> {
-  if (!isInstagramPostUrl(postUrl)) return null;
+async function downloadImage(imageUrl: string): Promise<File | null> {
+  const image = await fetchWithTimeout(imageUrl, IMAGE_TIMEOUT_MS, { 'user-agent': CRAWLER_UA });
+  if (!image.ok) {
+    console.warn('[instagram-thumbnail] 이미지 응답 실패', { status: image.status });
+    return null;
+  }
 
+  // 릴스 첨부는 mp4 가 오고, 만료된 CDN 주소는 HTML 을 돌려준다. 둘 다 여기서 걸린다.
+  const contentType = image.headers.get('content-type') ?? '';
+  if (!contentType.startsWith('image/')) {
+    console.warn('[instagram-thumbnail] 이미지가 아님', { contentType });
+    return null;
+  }
+
+  const bytes = await image.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
+
+  const ext = contentType.includes('png') ? 'png' : 'jpg';
+  return new File([bytes], `instagram-${Date.now()}.${ext}`, { type: contentType });
+}
+
+/**
+ * 대표 이미지를 File 로 돌려준다. 실패하면 null — 저장 자체를 막지 않는다.
+ * 호출부는 이 값이 없을 수 있다는 전제로 써야 한다.
+ *
+ *   게시물 주소  → 페이지의 og:image 를 찾아 받는다
+ *   CDN 주소     → 그 자체가 이미지라 바로 받는다
+ */
+export async function fetchInstagramThumbnail(url: string): Promise<File | null> {
   try {
-    const page = await fetchWithTimeout(postUrl, PAGE_TIMEOUT_MS, {
+    if (isInstagramMediaUrl(url)) return await downloadImage(url);
+    if (!isInstagramPostUrl(url)) return null;
+
+    const page = await fetchWithTimeout(url, PAGE_TIMEOUT_MS, {
       'user-agent': CRAWLER_UA,
       'accept-language': 'ko-KR,ko;q=0.9',
     });
@@ -81,17 +131,7 @@ export async function fetchInstagramThumbnail(postUrl: string): Promise<File | n
       return null;
     }
 
-    const image = await fetchWithTimeout(imageUrl, IMAGE_TIMEOUT_MS, { 'user-agent': CRAWLER_UA });
-    if (!image.ok) return null;
-
-    const contentType = image.headers.get('content-type') ?? '';
-    if (!contentType.startsWith('image/')) return null;
-
-    const bytes = await image.arrayBuffer();
-    if (bytes.byteLength === 0 || bytes.byteLength > MAX_IMAGE_BYTES) return null;
-
-    const ext = contentType.includes('png') ? 'png' : 'jpg';
-    return new File([bytes], `instagram-${Date.now()}.${ext}`, { type: contentType });
+    return await downloadImage(imageUrl);
   } catch (error) {
     // 타임아웃·네트워크 오류. 썸네일은 부가 기능이라 여기서 삼킨다.
     console.warn('[instagram-thumbnail] 가져오기 실패', error);

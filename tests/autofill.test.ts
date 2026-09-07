@@ -8,7 +8,12 @@ import {
   guessRegion,
   splitNumberedPlaces,
 } from '../src/lib/autofill.ts';
-import { extractOgImage, isInstagramPostUrl } from '../src/lib/instagram-thumbnail.ts';
+import {
+  canFetchThumbnail,
+  extractOgImage,
+  isInstagramMediaUrl,
+  isInstagramPostUrl,
+} from '../src/lib/instagram-thumbnail.ts';
 
 test('위치 마커가 있으면 그걸 이름으로 쓴다', () => {
   assert.equal(guessName('📍성수 베라짜뮤\n웨이팅 30분'), '성수 베라짜뮤');
@@ -122,6 +127,25 @@ test('인스타 게시물 주소만 허용한다', () => {
   assert.equal(isInstagramPostUrl('http://www.instagram.com/p/ABC/'), false);
   assert.equal(isInstagramPostUrl('https://www.instagram.com/someuser/'), false);
   assert.equal(isInstagramPostUrl(null), false);
+});
+
+test('첨부 미디어 CDN 주소도 썸네일 대상으로 본다', () => {
+  // Meta 가 퍼머링크 대신 이것만 주는 경우가 있다. 이걸 막아둬서 물건 쪽 썸네일이 비어 있었다.
+  const cdn = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=123';
+  assert.equal(isInstagramMediaUrl(cdn), true);
+  assert.equal(isInstagramMediaUrl('https://scontent-icn2-1.cdninstagram.com/v/t51/a.jpg'), true);
+  assert.equal(isInstagramMediaUrl('https://x.fbcdn.net/a.jpg'), true);
+
+  // 호스트를 못 박아 아무 주소나 서버가 대신 받아오지 않게 한다.
+  assert.equal(isInstagramMediaUrl('https://lookaside.fbsbx.com.evil.com/a.jpg'), false);
+  assert.equal(isInstagramMediaUrl('https://evil.com/a.jpg'), false);
+  assert.equal(isInstagramMediaUrl('http://lookaside.fbsbx.com/a.jpg'), false);
+  assert.equal(isInstagramMediaUrl(null), false);
+
+  // 둘 중 하나면 시도한다
+  assert.equal(canFetchThumbnail(cdn), true);
+  assert.equal(canFetchThumbnail('https://www.instagram.com/p/ABC123/'), true);
+  assert.equal(canFetchThumbnail('https://evil.com/a.jpg'), false);
 });
 
 // 실제로 DM 으로 들어온 캡션
