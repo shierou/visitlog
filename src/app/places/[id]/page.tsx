@@ -90,7 +90,7 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
       <ReferencePhotos placeId={place.id} items={refs} urls={urls} />
 
       {/* 저장 때 못 받아왔거나 규칙이 바뀌기 전에 등록한 항목을 위한 재시도 */}
-      {refs.length === 0 && canFetchThumbnail(place.sourceUrl) && (
+      {refs.length === 0 && canFetchThumbnail(place.thumbnailUrl ?? place.sourceUrl) && (
         <FetchThumbnailButton placeId={place.id} />
       )}
 

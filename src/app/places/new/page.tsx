@@ -33,6 +33,8 @@ function NewPlaceForm() {
   const [region, setRegion] = useState(guessed.region);
   const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
   const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
+  // 수집함이 넘겨준 썸네일 원본(CDN 주소). 사용자가 고칠 값이 아니라 입력칸 없이 들고만 간다.
+  const [thumbnailUrl] = useState(() => searchParams.get('thumbnailUrl') ?? '');
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -81,6 +83,7 @@ function NewPlaceForm() {
         region,
         priority,
         sourceUrl,
+        thumbnailUrl,
         source: searchParams.get('source'),
         instagramImportId: searchParams.get('importId'),
       };
@@ -251,7 +254,7 @@ function NewPlaceForm() {
             <PhotoPicker
               label="인스타 스크린샷"
               hint={
-                canFetchThumbnail(sourceUrl)
+                canFetchThumbnail(thumbnailUrl || sourceUrl)
                   ? '저장하면 대표 이미지가 자동으로 들어가요'
                   : '여러 장 가능'
               }

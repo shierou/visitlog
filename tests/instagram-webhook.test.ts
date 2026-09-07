@@ -52,6 +52,8 @@ test('extracts and canonicalizes a shared Instagram post URL', () => {
     senderId: 'sender-id',
     recipientId: 'collector-id',
     sourceUrl: 'https://www.instagram.com/reel/ABC123/',
+    mediaUrl: null,
+    dedupeKey: 'https://www.instagram.com/reel/ABC123/',
     messageText: '여기 가보고 싶어요',
     receivedAt: new Date(1_725_432_100_000),
     accountId: 'collector-id',
@@ -81,7 +83,9 @@ test('ignores ordinary messages and echo events', () => {
   assert.deepEqual(result, []);
 });
 
-test('keeps a share attachment URL when Meta does not provide a permalink', () => {
+// CDN 주소를 sourceUrl 에 담아두면 그게 그대로 "원본 열기" 링크가 된다. 서명이 만료되면
+// 죽고, 살아 있어도 게시물이 아니라 이미지 한 장으로 열려서 링크 자리에 두면 안 된다.
+test('keeps a share attachment URL as media only, never as the link', () => {
   const result = extractInstagramSharedPosts({
     object: 'instagram',
     entry: [
@@ -105,7 +109,10 @@ test('keeps a share attachment URL when Meta does not provide a permalink', () =
     ],
   });
 
-  assert.equal(result[0]?.sourceUrl, 'https://lookaside.fbsbx.com/shared-media');
+  assert.equal(result[0]?.sourceUrl, null);
+  assert.equal(result[0]?.mediaUrl, 'https://lookaside.fbsbx.com/shared-media');
+  // 링크가 없어도 중복은 막아야 하므로 CDN 주소가 신원이 된다.
+  assert.equal(result[0]?.dedupeKey, 'https://lookaside.fbsbx.com/shared-media');
 });
 
 // 실제 릴스 공유는 type:'share' 가 아니라 'ig_reel' 로 오고, url 은 인스타 퍼머링크가
@@ -141,8 +148,9 @@ test('collects a reel shared as an ig_reel attachment with a CDN url', () => {
   });
 
   assert.equal(scan.imports.length, 1);
+  assert.equal(scan.imports[0]?.sourceUrl, null);
   assert.equal(
-    scan.imports[0]?.sourceUrl,
+    scan.imports[0]?.mediaUrl,
     'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1234567890'
   );
   // 본문이 없으면 릴스 캡션을 메모 대용으로 남긴다.
@@ -170,4 +178,37 @@ test('reports why an event was skipped instead of dropping it silently', () => {
   });
   assert.deepEqual(wrongField.skipped, { entry_without_messaging: 1 });
   assert.deepEqual(wrongField.accountIds, ['collector-id']);
+});
+
+// 퍼머링크와 첨부가 함께 오면 링크는 퍼머링크, 썸네일 원본은 CDN 주소로 갈라야 한다.
+test('splits the permalink and the attachment media when both arrive', () => {
+  const result = extractInstagramSharedPosts({
+    object: 'instagram',
+    entry: [
+      {
+        id: 'collector-id',
+        messaging: [
+          {
+            timestamp: 1_725_432_100_000,
+            message: {
+              mid: 'both-mid',
+              text: 'https://www.instagram.com/p/XYZ/',
+              attachments: [
+                {
+                  type: 'ig_post',
+                  payload: { url: 'https://scontent.cdninstagram.com/v/cover.jpg?oe=1' },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.sourceUrl, 'https://www.instagram.com/p/XYZ/');
+  assert.equal(result[0]?.mediaUrl, 'https://scontent.cdninstagram.com/v/cover.jpg?oe=1');
+  // 중복 판정은 예전과 같이 퍼머링크 기준이다.
+  assert.equal(result[0]?.dedupeKey, 'https://www.instagram.com/p/XYZ/');
 });

@@ -16,15 +16,17 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
 
   const place = await db.place.findFirst({
     where: { id, ownerId: CURRENT_OWNER },
-    select: { id: true, sourceUrl: true },
+    select: { id: true, sourceUrl: true, thumbnailUrl: true },
   });
   if (!place) return NextResponse.json({ error: 'not found' }, { status: 404 });
 
-  if (!canFetchThumbnail(place.sourceUrl)) {
+  // 썸네일 전용 주소가 있으면 그쪽이 우선이다. 없을 때만 링크에서 긁는다.
+  const source = place.thumbnailUrl ?? place.sourceUrl;
+  if (!canFetchThumbnail(source)) {
     return NextResponse.json({ error: '인스타 링크가 아니에요' }, { status: 400 });
   }
 
-  const thumbnail = await fetchInstagramThumbnail(place.sourceUrl!);
+  const thumbnail = await fetchInstagramThumbnail(source!);
   if (!thumbnail) {
     // Meta 가 준 CDN 주소는 시간이 지나면 만료된다. 원인을 구분해줄 방법이 없어
     // 사용자에게는 직접 올리라고 안내한다.

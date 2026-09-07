@@ -30,6 +30,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     'region',
     'address',
     'sourceUrl',
+    'thumbnailUrl',
     'status',
     'listId',
   ] as const) {

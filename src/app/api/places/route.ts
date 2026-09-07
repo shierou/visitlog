@@ -73,6 +73,8 @@ export async function POST(req: NextRequest) {
     address: kind === 'item' ? null : body.address?.trim() || null,
     source,
     sourceUrl: body.sourceUrl?.trim() || null,
+    // 링크와 썸네일 원본은 다른 값이다. 폼이 안 보내면 링크에서 유추하지 않는다.
+    thumbnailUrl: body.thumbnailUrl?.trim() || null,
     listId: body.listId || null,
   };
 
@@ -104,9 +106,10 @@ export async function POST(req: NextRequest) {
   // 여러 곳을 한 번에 만든 경우는 붙이지 않는다. 게시물 표지 한 장이
   // 다섯 곳 모두의 사진인 척하게 되고, 엉뚱한 사진은 없는 것보다 나쁘다.
   const single = places.length === 1 ? places[0] : null;
-  if (single?.sourceUrl && canFetchThumbnail(single.sourceUrl)) {
+  const thumbnailSource = single ? single.thumbnailUrl ?? single.sourceUrl : null;
+  if (single && thumbnailSource && canFetchThumbnail(thumbnailSource)) {
     try {
-      const thumbnail = await fetchInstagramThumbnail(single.sourceUrl);
+      const thumbnail = await fetchInstagramThumbnail(thumbnailSource);
       if (thumbnail) {
         const path = await saveFile(thumbnail);
         await db.media.create({

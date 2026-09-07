@@ -6,7 +6,15 @@ export type InstagramSharedPost = {
   messageId: string;
   senderId: string | null;
   recipientId: string | null;
-  sourceUrl: string;
+  /** 사람이 여는 게시물 퍼머링크. Meta 가 첨부 CDN 주소만 주면 null 이다. */
+  sourceUrl: string | null;
+  /**
+   * 첨부 미디어 CDN 주소. 썸네일을 받는 데만 쓴다.
+   * 서명이 만료되면 죽는 주소라서 링크 자리에 넣으면 안 된다.
+   */
+  mediaUrl: string | null;
+  /** 재전송 중복을 막는 키 (sourceUrl ?? mediaUrl). messageId 와 함께 쓴다. */
+  dedupeKey: string;
   messageText: string | null;
   receivedAt: Date;
   accountId: string;
@@ -77,7 +85,8 @@ function normalizeInstagramPostUrl(value: string): string | null {
   }
 }
 
-function normalizeShareFallback(value: string): string | null {
+/** 첨부 미디어 주소. 어떤 호스트가 올지 Meta 가 정하므로 형식만 본다. */
+function normalizeMediaUrl(value: string): string | null {
   try {
     const url = new URL(value);
     if (url.protocol !== 'https:' || value.length > 2048) return null;
@@ -87,8 +96,8 @@ function normalizeShareFallback(value: string): string | null {
   }
 }
 
-function fallbackMessageId(accountId: string, timestamp: number, sourceUrl: string): string {
-  const digest = createHash('sha256').update(sourceUrl).digest('hex').slice(0, 20);
+function fallbackMessageId(accountId: string, timestamp: number, dedupeKey: string): string {
+  const digest = createHash('sha256').update(dedupeKey).digest('hex').slice(0, 20);
   return `fallback:${accountId}:${timestamp}:${digest}`;
 }
 
@@ -111,7 +120,7 @@ export function verifyMetaSignature(
 
 /**
  * 일반 대화는 저장하지 않고, 게시물/릴스 URL이 포함된 수신 메시지만 추출한다.
- * Meta는 동일 이벤트를 재전송할 수 있으므로 호출자는 messageId + sourceUrl로 중복을 막아야 한다.
+ * Meta는 동일 이벤트를 재전송할 수 있으므로 호출자는 messageId + dedupeKey로 중복을 막아야 한다.
  *
  * 버린 이벤트가 조용히 사라지면 원인을 찾을 수 없으므로 사유를 함께 돌려준다.
  */
@@ -185,7 +194,7 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
       const recipientId = asString(asObject(event.recipient)?.id);
       const messageText = asString(message.text)?.slice(0, 2000) ?? null;
       const directCandidates = messageText ? extractUrls(messageText) : [];
-      const shareFallbacks: string[] = [];
+      const mediaCandidates: string[] = [];
       // 릴스 공유는 본문 없이 캡션(title)만 오는 일이 많아 메모 대용으로 쓴다.
       let attachmentTitle: string | null = null;
 
@@ -201,37 +210,56 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
 
           directCandidates.push(attachmentUrl);
           if (attachmentType && SHARE_ATTACHMENT_TYPES.has(attachmentType)) {
-            shareFallbacks.push(attachmentUrl);
+            mediaCandidates.push(attachmentUrl);
             attachmentTitle ??= asString(attachmentPayload?.title)?.slice(0, 2000) ?? null;
           }
         }
       }
 
-      const canonicalUrls = directCandidates
-        .map(normalizeInstagramPostUrl)
-        .filter((url): url is string => Boolean(url));
-      const urls = canonicalUrls.length
-        ? [...new Set(canonicalUrls)]
-        : [
-            ...new Set(
-              shareFallbacks
-                .map(normalizeShareFallback)
-                .filter((url): url is string => Boolean(url))
-            ),
-          ];
+      const permalinks = [
+        ...new Set(
+          directCandidates
+            .map(normalizeInstagramPostUrl)
+            .filter((url): url is string => Boolean(url))
+        ),
+      ];
+      // 첨부가 퍼머링크 그 자체인 경우도 있다. 그건 링크지 미디어가 아니므로 뺀다.
+      const mediaUrls = [
+        ...new Set(
+          mediaCandidates
+            .filter((url) => !normalizeInstagramPostUrl(url))
+            .map(normalizeMediaUrl)
+            .filter((url): url is string => Boolean(url))
+        ),
+      ];
 
-      if (urls.length === 0) {
+      // 퍼머링크가 있으면 그게 링크다. 없으면 CDN 주소만 남는데, 이건 만료되는 주소라
+      // 링크가 아니라 썸네일 원본으로만 들고 간다 (sourceUrl 은 null).
+      const pairs: Array<{ sourceUrl: string | null; mediaUrl: string | null }> =
+        permalinks.length
+          ? permalinks.map((sourceUrl) => ({
+              sourceUrl,
+              // 첨부가 한 벌일 때만 짝지어준다. 링크가 여럿이면 어느 것의 이미지인지 알 수 없다.
+              mediaUrl: permalinks.length === 1 ? mediaUrls[0] ?? null : null,
+            }))
+          : mediaUrls.map((mediaUrl) => ({ sourceUrl: null, mediaUrl }));
+
+      if (pairs.length === 0) {
         skip(directCandidates.length ? 'no_shared_post_url' : 'plain_message');
         continue;
       }
 
-      for (const sourceUrl of urls) {
+      for (const pair of pairs) {
+        // 둘 중 하나는 반드시 있다. 링크가 있으면 링크가, 없으면 CDN 주소가 신원이 된다.
+        const dedupeKey = (pair.sourceUrl ?? pair.mediaUrl)!;
         imports.push({
           messageId:
-            asString(message.mid) ?? fallbackMessageId(accountId, timestamp, sourceUrl),
+            asString(message.mid) ?? fallbackMessageId(accountId, timestamp, dedupeKey),
           senderId,
           recipientId,
-          sourceUrl,
+          sourceUrl: pair.sourceUrl,
+          mediaUrl: pair.mediaUrl,
+          dedupeKey,
           messageText: messageText ?? attachmentTitle,
           receivedAt: new Date(timestamp),
           accountId,

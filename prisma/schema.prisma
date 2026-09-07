@@ -45,7 +45,13 @@ model Place {
 
   // 출처 (Track 2 대비: 'manual' | 'ig_share' | 'ig_import')
   source    String  @default("manual")
+
+  // 사람이 여는 링크. 게시물 퍼머링크이거나 직접 적은 아무 주소다.
   sourceUrl String?
+
+  // 대표 이미지를 받아올 주소. Meta 가 퍼머링크 대신 준 첨부 CDN 주소가 여기 들어간다.
+  // 서명이 만료되면 죽는 주소라서 sourceUrl 과 분리한다. 링크로는 내보내지 않는다.
+  thumbnailUrl String?
 
   status String @default("wishlist") // wishlist | visited | skipped
 
@@ -66,14 +72,24 @@ model Place {
 }
 
 // Instagram DM으로 공유된 게시물을 장소로 정리하기 전까지 보관하는 수집함.
-// Meta가 같은 Webhook을 재전송할 수 있으므로 messageId + sourceUrl 조합으로 중복을 막는다.
+// Meta가 같은 Webhook을 재전송할 수 있으므로 messageId + dedupeKey 조합으로 중복을 막는다.
 model InstagramImport {
   id          String   @id @default(cuid())
   ownerId     String   @default("local")
   messageId   String
   senderId    String?
   recipientId String?
-  sourceUrl   String
+
+  // 게시물 퍼머링크. Meta 가 첨부 CDN 주소만 보내면 null 이다.
+  sourceUrl String?
+
+  // 첨부 미디어 CDN 주소. 썸네일을 받는 데만 쓰고 링크로는 쓰지 않는다.
+  mediaUrl String?
+
+  // 재전송 중복을 막는 키 (sourceUrl ?? mediaUrl).
+  // sourceUrl 이 nullable 이 되면서 (messageId, sourceUrl) 유니크로는 NULL 행을 못 막는다.
+  dedupeKey String
+
   messageText String?
   status      String   @default("pending") // pending | converted | ignored
   receivedAt  DateTime
@@ -84,7 +100,7 @@ model InstagramImport {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([messageId, sourceUrl])
+  @@unique([messageId, dedupeKey])
   @@index([ownerId, status, receivedAt])
   @@index([placeId])
 }

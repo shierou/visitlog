@@ -113,6 +113,8 @@ export async function POST(req: NextRequest) {
         senderId: item.senderId,
         recipientId: item.recipientId,
         sourceUrl: item.sourceUrl,
+        mediaUrl: item.mediaUrl,
+        dedupeKey: item.dedupeKey,
         messageText: item.messageText,
         receivedAt: item.receivedAt,
       })),

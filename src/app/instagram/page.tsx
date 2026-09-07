@@ -54,9 +54,11 @@ export default async function InstagramInbox() {
       <div className="space-y-3 px-4 py-4">
         {items.map((item) => {
           const query = new URLSearchParams({
-            sourceUrl: item.sourceUrl,
             source: 'ig_share',
             importId: item.id,
+            ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
+            // 썸네일 원본은 화면에 보이지 않지만 장소로 넘길 때 같이 들고 간다.
+            ...(item.mediaUrl ? { thumbnailUrl: item.mediaUrl } : {}),
             ...(item.messageText ? { memo: item.messageText } : {}),
           });
 
@@ -71,14 +73,22 @@ export default async function InstagramInbox() {
                   {item.messageText}
                 </p>
               )}
-              <a
-                href={item.sourceUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-2 block truncate text-sm text-blue-600 underline"
-              >
-                Instagram 원본 열기
-              </a>
+              {/* 퍼머링크가 있을 때만 연다. CDN 주소는 게시물이 아니라 이미지 한 장이고
+                  서명이 만료되면 죽어서, 링크로 걸면 깨진 링크가 된다. */}
+              {item.sourceUrl ? (
+                <a
+                  href={item.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block truncate text-sm text-blue-600 underline"
+                >
+                  Instagram 원본 열기
+                </a>
+              ) : (
+                <p className="mt-2 text-xs text-neutral-400">
+                  원본 링크 없이 이미지만 공유됐어요. 등록하면 대표 이미지는 들어가요.
+                </p>
+              )}
               <div className="mt-4 flex gap-2">
                 <Link
                   href={`/places/new?${query}`}
