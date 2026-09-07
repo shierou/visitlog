@@ -331,6 +331,14 @@ function NewPlaceForm() {
               등록할 것만 체크하세요. 이름은 눌러서 고칠 수 있어요. 사진은 줄마다 한 장씩
               붙습니다.
             </p>
+            {images.length === 1 && rows.length > 1 && (
+              /* 캐러셀 공유는 표지 한 장만 온다. 나머지 슬라이드는 받을 방법이 없어서
+                 스크린샷 경로를 안내한다. */
+              <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+                DM에 담겨온 이미지는 표지 1장뿐이에요. 슬라이드를 넘기며 찍은 스크린샷을
+                &ldquo;사진으로 줄 추가&rdquo;로 붙이면 이름·정보도 자동으로 읽어올 수 있어요.
+              </p>
+            )}
 
             <div className="mt-2 space-y-2">
               {rows.map((row, i) => (
@@ -349,7 +357,7 @@ function NewPlaceForm() {
                       onChange={(e) => updateRow(i, { checked: e.target.checked })}
                       className="size-4 shrink-0 accent-neutral-900 dark:accent-white"
                     />
-                    {images.length > 0 && !row.photo && (
+                    {images.length > 1 && !row.photo && (
                       /* 탭할 때마다 다음 이미지로 넘어간다. 자동 짝이 틀렸을 때 고치는 길이다. */
                       <button
                         type="button"
