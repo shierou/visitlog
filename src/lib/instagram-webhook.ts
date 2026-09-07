@@ -9,11 +9,11 @@ export type InstagramSharedPost = {
   /** 사람이 여는 게시물 퍼머링크. Meta 가 첨부 CDN 주소만 주면 null 이다. */
   sourceUrl: string | null;
   /**
-   * 첨부 미디어 CDN 주소. 썸네일을 받는 데만 쓴다.
-   * 서명이 만료되면 죽는 주소라서 링크 자리에 넣으면 안 된다.
+   * 첨부 미디어 CDN 주소들. 한 DM 에 여러 장이 오면 순서대로 담는다.
+   * 썸네일을 받는 데만 쓴다. 서명이 만료되면 죽는 주소라서 링크 자리에 넣으면 안 된다.
    */
-  mediaUrl: string | null;
-  /** 재전송 중복을 막는 키 (sourceUrl ?? mediaUrl). messageId 와 함께 쓴다. */
+  mediaUrls: string[];
+  /** 재전송 중복을 막는 키 (sourceUrl ?? mediaUrls[0]). messageId 와 함께 쓴다. */
   dedupeKey: string;
   messageText: string | null;
   receivedAt: Date;
@@ -235,14 +235,17 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
 
       // 퍼머링크가 있으면 그게 링크다. 없으면 CDN 주소만 남는데, 이건 만료되는 주소라
       // 링크가 아니라 썸네일 원본으로만 들고 간다 (sourceUrl 은 null).
-      const pairs: Array<{ sourceUrl: string | null; mediaUrl: string | null }> =
+      // 이미지 여러 장이 와도 한 DM 은 한 맥락이므로 항목 하나에 전부 담는다.
+      const pairs: Array<{ sourceUrl: string | null; mediaUrls: string[] }> =
         permalinks.length
           ? permalinks.map((sourceUrl) => ({
               sourceUrl,
-              // 첨부가 한 벌일 때만 짝지어준다. 링크가 여럿이면 어느 것의 이미지인지 알 수 없다.
-              mediaUrl: permalinks.length === 1 ? mediaUrls[0] ?? null : null,
+              // 링크가 하나일 때만 짝지어준다. 여럿이면 어느 것의 이미지인지 알 수 없다.
+              mediaUrls: permalinks.length === 1 ? mediaUrls : [],
             }))
-          : mediaUrls.map((mediaUrl) => ({ sourceUrl: null, mediaUrl }));
+          : mediaUrls.length
+            ? [{ sourceUrl: null, mediaUrls }]
+            : [];
 
       if (pairs.length === 0) {
         skip(directCandidates.length ? 'no_shared_post_url' : 'plain_message');
@@ -250,15 +253,15 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
       }
 
       for (const pair of pairs) {
-        // 둘 중 하나는 반드시 있다. 링크가 있으면 링크가, 없으면 CDN 주소가 신원이 된다.
-        const dedupeKey = (pair.sourceUrl ?? pair.mediaUrl)!;
+        // 둘 중 하나는 반드시 있다. 링크가 있으면 링크가, 없으면 첫 CDN 주소가 신원이 된다.
+        const dedupeKey = (pair.sourceUrl ?? pair.mediaUrls[0])!;
         imports.push({
           messageId:
             asString(message.mid) ?? fallbackMessageId(accountId, timestamp, dedupeKey),
           senderId,
           recipientId,
           sourceUrl: pair.sourceUrl,
-          mediaUrl: pair.mediaUrl,
+          mediaUrls: pair.mediaUrls,
           dedupeKey,
           messageText: messageText ?? attachmentTitle,
           receivedAt: new Date(timestamp),

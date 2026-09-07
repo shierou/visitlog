@@ -53,6 +53,30 @@ export function canFetchThumbnail(value: string | null | undefined): boolean {
   return isInstagramPostUrl(value) || isInstagramMediaUrl(value);
 }
 
+export type OutboundLink = {
+  href: string;
+  /** 서명이 만료되면 죽는 주소인가. 라벨을 달리 달아 기대치를 낮추는 데 쓴다. */
+  expiring: boolean;
+};
+
+/**
+ * 바깥으로 걸 링크 하나를 고른다.
+ *
+ * 퍼머링크가 있으면 그게 원본이다. 없으면 Meta 가 CDN 주소만 준 경우인데,
+ * 그거라도 열 수 있어야 한다. DM 으로 공유된 향수·의류는 퍼머링크 없이
+ * 이미지만 오는 일이 잦아서, 링크를 아예 숨기면 손에 남는 게 없다.
+ *
+ * 대신 만료되는 주소라는 사실은 호출부가 알 수 있게 함께 돌려준다.
+ */
+export function outboundLink(
+  sourceUrl: string | null | undefined,
+  thumbnailUrl: string | null | undefined
+): OutboundLink | null {
+  if (sourceUrl) return { href: sourceUrl, expiring: false };
+  if (thumbnailUrl) return { href: thumbnailUrl, expiring: true };
+  return null;
+}
+
 /** HTML 에서 og:image 값을 뽑는다. 속성 순서가 뒤집힌 경우도 있어서 둘 다 본다. */
 export function extractOgImage(html: string): string | null {
   const patterns = [

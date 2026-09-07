@@ -52,7 +52,7 @@ test('extracts and canonicalizes a shared Instagram post URL', () => {
     senderId: 'sender-id',
     recipientId: 'collector-id',
     sourceUrl: 'https://www.instagram.com/reel/ABC123/',
-    mediaUrl: null,
+    mediaUrls: [],
     dedupeKey: 'https://www.instagram.com/reel/ABC123/',
     messageText: '여기 가보고 싶어요',
     receivedAt: new Date(1_725_432_100_000),
@@ -110,8 +110,8 @@ test('keeps a share attachment URL as media only, never as the link', () => {
   });
 
   assert.equal(result[0]?.sourceUrl, null);
-  assert.equal(result[0]?.mediaUrl, 'https://lookaside.fbsbx.com/shared-media');
-  // 링크가 없어도 중복은 막아야 하므로 CDN 주소가 신원이 된다.
+  assert.deepEqual(result[0]?.mediaUrls, ['https://lookaside.fbsbx.com/shared-media']);
+  // 링크가 없어도 중복은 막아야 하므로 첫 CDN 주소가 신원이 된다.
   assert.equal(result[0]?.dedupeKey, 'https://lookaside.fbsbx.com/shared-media');
 });
 
@@ -149,10 +149,9 @@ test('collects a reel shared as an ig_reel attachment with a CDN url', () => {
 
   assert.equal(scan.imports.length, 1);
   assert.equal(scan.imports[0]?.sourceUrl, null);
-  assert.equal(
-    scan.imports[0]?.mediaUrl,
-    'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1234567890'
-  );
+  assert.deepEqual(scan.imports[0]?.mediaUrls, [
+    'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1234567890',
+  ]);
   // 본문이 없으면 릴스 캡션을 메모 대용으로 남긴다.
   assert.equal(scan.imports[0]?.messageText, '성수동 파스타 맛집');
   assert.deepEqual(scan.attachmentTypes, ['ig_reel']);
@@ -208,7 +207,43 @@ test('splits the permalink and the attachment media when both arrive', () => {
 
   assert.equal(result.length, 1);
   assert.equal(result[0]?.sourceUrl, 'https://www.instagram.com/p/XYZ/');
-  assert.equal(result[0]?.mediaUrl, 'https://scontent.cdninstagram.com/v/cover.jpg?oe=1');
+  assert.deepEqual(result[0]?.mediaUrls, [
+    'https://scontent.cdninstagram.com/v/cover.jpg?oe=1',
+  ]);
   // 중복 판정은 예전과 같이 퍼머링크 기준이다.
   assert.equal(result[0]?.dedupeKey, 'https://www.instagram.com/p/XYZ/');
+});
+
+// 이미지 여러 장을 한 DM 으로 보내면 카드 하나에 순서대로 담겨야 한다.
+// 장마다 카드를 쪼개면 같은 캡션이 N 번 복사되고 수집함이 어질러진다.
+test('bundles multiple attachment images into one import, in order', () => {
+  const result = extractInstagramSharedPosts({
+    object: 'instagram',
+    entry: [
+      {
+        id: 'collector-id',
+        messaging: [
+          {
+            timestamp: 1_725_432_100_000,
+            message: {
+              mid: 'multi-mid',
+              attachments: [1, 2, 3].map((n) => ({
+                type: 'share',
+                payload: { url: `https://lookaside.fbsbx.com/m/${n}` },
+              })),
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0]?.sourceUrl, null);
+  assert.deepEqual(result[0]?.mediaUrls, [
+    'https://lookaside.fbsbx.com/m/1',
+    'https://lookaside.fbsbx.com/m/2',
+    'https://lookaside.fbsbx.com/m/3',
+  ]);
+  assert.equal(result[0]?.dedupeKey, 'https://lookaside.fbsbx.com/m/1');
 });

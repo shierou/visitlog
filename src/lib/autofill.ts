@@ -326,6 +326,56 @@ function splitBulleted(caption: string): SplitPlace[] {
   return [];
 }
 
+/** 줄 전체가 멘션 하나뿐인가. `(@fragranticaofficial)에서` 같은 본문 속 멘션은 뺀다. */
+const MENTION_ONLY = /^@([a-z0-9._]{1,30})$/iu;
+
+/** 멘션 목록으로 인정하는 최소 개수. 사진 출처·친구 태그 한둘과 구분하는 선이다. */
+const MENTION_MIN = 3;
+
+/**
+ * 캡션 끝에 브랜드 계정을 줄줄이 멘션해둔 큐레이션 게시물.
+ *
+ *   📷
+ *   @jomalonelondon
+ *   @diptyque
+ *   …
+ *
+ * 캐러셀 이미지에만 제품명이 있어서 번호·불릿으로는 쪼갤 근거가 없는데,
+ * 이 멘션 블록이 슬라이드 순서와 맞는 경우가 많다. 제품명까지는 못 주지만
+ * 줄 개수와 브랜드는 맞춰주므로 빈 줄을 여덟 개 만드는 것보다 낫다.
+ *
+ * 멘션이 흩어져 있으면 목록이 아니라 그냥 태그다. 연속으로 이어진 덩어리만 본다.
+ */
+function splitMentions(caption: string): SplitPlace[] {
+  let best: string[] = [];
+  let run: string[] = [];
+
+  const flush = () => {
+    if (run.length > best.length) best = run;
+    run = [];
+  };
+
+  for (const line of caption.split('\n')) {
+    // tidy() 는 멘션을 지워버리므로 여기서는 못 쓴다. 이모지와 공백만 걷어낸다.
+    const trimmed = line.replace(EMOJI, '').trim();
+    // 빈 줄은 덩어리를 끊지 않는다. 멘션 사이에 줄바꿈이 하나 더 있는 캡션이 흔하다.
+    if (!trimmed) continue;
+
+    const handle = trimmed.match(MENTION_ONLY)?.[1];
+    if (!handle) {
+      flush();
+      continue;
+    }
+    // 같은 브랜드를 두 번 멘션해도 줄은 하나여야 한다.
+    if (!run.some((h) => h.toLowerCase() === handle.toLowerCase())) run.push(handle);
+  }
+  flush();
+
+  if (best.length < MENTION_MIN) return [];
+  // 제품명은 이미지 안에 있어서 여기서 줄 수 없다. 이름은 사용자가 채운다.
+  return best.map((handle) => ({ name: handle, memo: '' }));
+}
+
 /**
  * 한 게시물에 여러 개가 담겨 있으면 항목별로 쪼갠다.
  * 2개 미만이면 목록이 아니라고 보고 빈 배열을 돌려준다.
@@ -333,7 +383,10 @@ function splitBulleted(caption: string): SplitPlace[] {
 export function splitListItems(caption: string | null | undefined): SplitPlace[] {
   if (!caption) return [];
   const numbered = splitNumbered(caption);
-  return numbered.length ? numbered : splitBulleted(caption);
+  if (numbered.length) return numbered;
+  const bulleted = splitBulleted(caption);
+  // 멘션은 가장 약한 근거라 번호·불릿이 아무것도 못 찾았을 때만 본다.
+  return bulleted.length ? bulleted : splitMentions(caption);
 }
 
 export type Autofill = { kind: Kind; name: string; category: string; region: string };

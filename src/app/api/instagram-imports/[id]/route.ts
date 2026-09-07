@@ -3,6 +3,17 @@ import { db, CURRENT_OWNER } from '@/lib/db';
 
 type Context = { params: Promise<{ id: string }> };
 
+/** 등록 폼이 항목-이미지 짝짓기 미리보기에 쓴다. */
+export async function GET(_req: NextRequest, { params }: Context) {
+  const { id } = await params;
+  const item = await db.instagramImport.findFirst({
+    where: { id, ownerId: CURRENT_OWNER },
+    select: { id: true, sourceUrl: true, mediaUrls: true, messageText: true, status: true },
+  });
+  if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  return NextResponse.json(item);
+}
+
 export async function PATCH(req: NextRequest, { params }: Context) {
   const { id } = await params;
   const body = await req.json();

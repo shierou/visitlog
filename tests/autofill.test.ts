@@ -265,3 +265,73 @@ test('og:image 를 뽑고 HTML 엔티티를 되돌린다', () => {
 
   assert.equal(extractOgImage('<html>og:image 없음</html>'), null);
 });
+
+// 실제로 들어온 캡션. 캐러셀 이미지에만 제품명이 있어 번호·불릿으로는 쪼갤 근거가 없다.
+const 향수_큐레이션 = [
+  '전 세계 향덕들이 직접 평가하는 프래그런티카(@fragranticaofficial)에서 종합 평점 4.0 이상을 받은 인기 향수만 모아봤어. 🌏✨',
+  '',
+  '유행을 넘어 오랫동안 사랑받아 온 작품들이라 입문자부터 향덕까지 한 번쯤은 들어봤을 이름들일 거야.',
+  '',
+  '📷',
+  '@jomalonelondon',
+  '@diptyque',
+  '@hermes',
+  '@yslbeauty',
+  '@burberrybeauty',
+  '@montblanc',
+  '@exnihiloparis',
+  '@isseymiyakeparfums',
+].join('\n');
+
+test('브랜드를 줄줄이 멘션한 게시물은 멘션 수만큼 쪼갠다', () => {
+  const items = splitListItems(향수_큐레이션);
+
+  // 본문 안에 섞인 @fragranticaofficial 은 목록이 아니라 출처라서 빠져야 한다.
+  assert.deepEqual(
+    items.map((i) => i.name),
+    [
+      'jomalonelondon',
+      'diptyque',
+      'hermes',
+      'yslbeauty',
+      'burberrybeauty',
+      'montblanc',
+      'exnihiloparis',
+      'isseymiyakeparfums',
+    ]
+  );
+  // 제품명은 이미지 안에 있어서 메모로 채울 것이 없다.
+  assert.deepEqual(new Set(items.map((i) => i.memo)), new Set(['']));
+
+  // 향수 게시물이므로 물건으로 열려야 한다.
+  const guess = autofillFromCaption(향수_큐레이션);
+  assert.equal(guess.kind, 'item');
+  assert.equal(guess.category, '향수');
+});
+
+test('멘션은 번호·불릿이 아무것도 못 찾았을 때만 본다', () => {
+  const 번호와_멘션 = ['1. 가게A', '2. 가게B', '', '@friend1', '@friend2', '@friend3'].join('\n');
+  assert.deepEqual(
+    splitListItems(번호와_멘션).map((p) => p.name),
+    ['가게A', '가게B']
+  );
+});
+
+test('흩어진 태그 몇 개는 목록이 아니다', () => {
+  // 사진 출처 한둘 — 세 개 미만이면 쪼개지 않는다
+  assert.deepEqual(splitListItems('성수 베라짜뮤 다녀옴\n@friend1\n@friend2'), []);
+  // 줄 전체가 멘션이어야 한다. 문장 속 멘션은 목록이 아니다
+  assert.deepEqual(
+    splitListItems('@a 랑 @b 랑 @c 랑 다녀옴\n@d 도 같이'),
+    []
+  );
+  // 멘션 사이에 다른 줄이 끼면 연속 덩어리가 끊긴다
+  assert.deepEqual(splitListItems('@a\n웨이팅 30분\n@b\n주차 가능\n@c'), []);
+});
+
+test('같은 브랜드를 두 번 멘션해도 줄은 하나다', () => {
+  assert.deepEqual(
+    splitListItems('@a\n@b\n@A\n@c').map((p) => p.name),
+    ['a', 'b', 'c']
+  );
+});

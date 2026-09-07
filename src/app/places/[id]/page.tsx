@@ -9,7 +9,7 @@ import PlaceMetaEditor from '@/components/PlaceMetaEditor';
 import BoughtToggle from '@/components/BoughtToggle';
 import FetchThumbnailButton from '@/components/FetchThumbnailButton';
 import { priorityMeta, kindMeta } from '@/lib/taxonomy';
-import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
+import { canFetchThumbnail, outboundLink } from '@/lib/instagram-thumbnail';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +30,8 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
   const pr = priorityMeta(place.priority);
   const meta = kindMeta(place.kind);
   const isItem = place.kind === 'item';
+  // 퍼머링크가 없으면 DM 으로 온 이미지라도 열 수 있게 한다.
+  const link = outboundLink(place.sourceUrl, place.thumbnailUrl);
 
   return (
     <>
@@ -65,14 +67,14 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
 
         {place.memo && <p className="mt-3 whitespace-pre-wrap text-sm">{place.memo}</p>}
 
-        {place.sourceUrl && (
+        {link && (
           <a
-            href={place.sourceUrl}
+            href={link.href}
             target="_blank"
             rel="noreferrer"
             className="mt-3 inline-block truncate text-sm text-blue-600 underline"
           >
-            원본 링크 열기 ↗
+            {link.expiring ? '공유된 이미지 열기 ↗' : '원본 링크 열기 ↗'}
           </a>
         )}
       </div>

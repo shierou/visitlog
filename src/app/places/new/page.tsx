@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import PhotoPicker, { stageFiles, uploadStaged, type Staged } from '@/components/PhotoPicker';
@@ -14,7 +14,14 @@ import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
  * photo 는 그 줄로 만들어진 항목에만 붙는 사진이다. 캐러셀을 넘기며 찍은 향수 사진처럼
  * 이미지 한 장이 곧 제품 하나인 게시물이 흔해서, 목록 전체가 아니라 줄마다 들고 있다.
  */
-type Row = { name: string; memo: string; checked: boolean; photo: Staged | null };
+type Row = {
+  name: string;
+  memo: string;
+  checked: boolean;
+  photo: Staged | null;
+  /** DM 에 담겨온 이미지 중 이 줄의 것. photo(직접 올린 사진)와 별개다. */
+  imageIndex?: number | null;
+};
 
 function NewPlaceForm() {
   const router = useRouter();
@@ -40,6 +47,43 @@ function NewPlaceForm() {
   const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
   // 수집함이 넘겨준 썸네일 원본(CDN 주소). 사용자가 고칠 값이 아니라 입력칸 없이 들고만 간다.
   const [thumbnailUrl] = useState(() => searchParams.get('thumbnailUrl') ?? '');
+
+  // DM 에 담겨온 이미지 전부. 여러 항목으로 나눠 등록할 때 행마다 골라 붙인다.
+  const importId = searchParams.get('importId');
+  const [images, setImages] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!importId) return;
+    let alive = true;
+    fetch(`/api/instagram-imports/${importId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!alive || !Array.isArray(data?.mediaUrls)) return;
+        const urls: string[] = data.mediaUrls;
+        setImages(urls);
+        // 항목 수와 이미지 수가 정확히 같을 때만 순서대로 짝지어준다.
+        // 다르면 어느 이미지가 어느 항목인지 알 수 없으므로 사용자가 행마다 고른다.
+        setRows((prev) =>
+          prev.length === urls.length ? prev.map((r, i) => ({ ...r, imageIndex: i })) : prev
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importId]);
+
+  /** 행의 사진을 다음 이미지로 넘긴다. 끝까지 가면 "사진 없음"을 거쳐 처음으로 돈다. */
+  function cycleImage(index: number) {
+    setRows((prev) =>
+      prev.map((r, i) => {
+        if (i !== index) return r;
+        const next = r.imageIndex === null || r.imageIndex === undefined ? 0 : r.imageIndex + 1;
+        return { ...r, imageIndex: next >= images.length ? null : next };
+      })
+    );
+  }
   const [shots, setShots] = useState<Staged[]>([]);
   const [saving, setSaving] = useState(false);
   // 사진을 리사이즈·압축하는 동안 같은 파일을 두 번 밀어 넣지 않게 막는다.
@@ -146,7 +190,14 @@ function NewPlaceForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(
           multi
-            ? { ...shared, items: picked.map((r) => ({ name: r.name, memo: r.memo })) }
+            ? {
+                ...shared,
+                items: picked.map((r) => ({
+                  name: r.name,
+                  memo: r.memo,
+                  imageIndex: r.imageIndex ?? null,
+                })),
+              }
             : { ...shared, name, memo }
         ),
       });
@@ -230,6 +281,30 @@ function NewPlaceForm() {
                       onChange={(e) => updateRow(i, { checked: e.target.checked })}
                       className="size-4 shrink-0 accent-neutral-900 dark:accent-white"
                     />
+                    {images.length > 0 && !row.photo && (
+                      /* 탭할 때마다 다음 이미지로 넘어간다. 자동 짝이 틀렸을 때 고치는 길이다. */
+                      <button
+                        type="button"
+                        onClick={() => cycleImage(i)}
+                        aria-label="이 항목의 사진 고르기"
+                        className="shrink-0"
+                      >
+                        {row.imageIndex !== null &&
+                        row.imageIndex !== undefined &&
+                        images[row.imageIndex] ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={images[row.imageIndex]}
+                            alt=""
+                            className="size-10 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <span className="flex size-10 items-center justify-center rounded-lg border border-dashed border-neutral-300 text-[10px] text-neutral-400 dark:border-neutral-700">
+                            사진
+                          </span>
+                        )}
+                      </button>
+                    )}
                     <button
                       type="button"
                       disabled={staging}
@@ -384,9 +459,11 @@ function NewPlaceForm() {
             <PhotoPicker
               label="인스타 스크린샷"
               hint={
-                canFetchThumbnail(thumbnailUrl || sourceUrl)
-                  ? '저장하면 대표 이미지가 자동으로 들어가요'
-                  : '여러 장 가능'
+                images.length > 1
+                  ? `저장하면 공유된 이미지 ${images.length}장이 자동으로 들어가요`
+                  : canFetchThumbnail(thumbnailUrl || sourceUrl)
+                    ? '저장하면 대표 이미지가 자동으로 들어가요'
+                    : '여러 장 가능'
               }
               staged={shots}
               onChange={setShots}

@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import InstagramImportActions from '@/components/InstagramImportActions';
+import { outboundLink } from '@/lib/instagram-thumbnail';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,9 +59,11 @@ export default async function InstagramInbox() {
             importId: item.id,
             ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
             // 썸네일 원본은 화면에 보이지 않지만 장소로 넘길 때 같이 들고 간다.
-            ...(item.mediaUrl ? { thumbnailUrl: item.mediaUrl } : {}),
+            // 나머지 장들은 폼이 importId 로 서버에서 읽는다.
+            ...(item.mediaUrls[0] ? { thumbnailUrl: item.mediaUrls[0] } : {}),
             ...(item.messageText ? { memo: item.messageText } : {}),
           });
+          const link = outboundLink(item.sourceUrl, item.mediaUrls[0] ?? null);
 
           return (
             <article
@@ -73,20 +76,21 @@ export default async function InstagramInbox() {
                   {item.messageText}
                 </p>
               )}
-              {/* 퍼머링크가 있을 때만 연다. CDN 주소는 게시물이 아니라 이미지 한 장이고
-                  서명이 만료되면 죽어서, 링크로 걸면 깨진 링크가 된다. */}
-              {item.sourceUrl ? (
+              {/* CDN 주소는 게시물이 아니라 이미지 한 장이고 서명이 만료되면 죽는다.
+                  숨기지는 않되 "원본"이라고 부르지 않는다. */}
+              {link && (
                 <a
-                  href={item.sourceUrl}
+                  href={link.href}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-2 block truncate text-sm text-blue-600 underline"
                 >
-                  Instagram 원본 열기
+                  {link.expiring ? '공유된 이미지 열기' : 'Instagram 원본 열기'}
                 </a>
-              ) : (
-                <p className="mt-2 text-xs text-neutral-400">
-                  원본 링크 없이 이미지만 공유됐어요. 등록하면 대표 이미지는 들어가요.
+              )}
+              {item.mediaUrls.length > 1 && (
+                <p className="mt-1 text-xs text-neutral-400">
+                  이미지 {item.mediaUrls.length}장 · 등록할 때 항목마다 골라 붙일 수 있어요
                 </p>
               )}
               <div className="mt-4 flex gap-2">

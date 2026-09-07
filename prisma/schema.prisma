@@ -83,10 +83,11 @@ model InstagramImport {
   // 게시물 퍼머링크. Meta 가 첨부 CDN 주소만 보내면 null 이다.
   sourceUrl String?
 
-  // 첨부 미디어 CDN 주소. 썸네일을 받는 데만 쓰고 링크로는 쓰지 않는다.
-  mediaUrl String?
+  // 첨부 미디어 CDN 주소들. 한 DM 에 여러 장이 오면 순서대로 담는다.
+  // 썸네일을 받는 데만 쓰고 링크로는 쓰지 않는다.
+  mediaUrls String[] @default([])
 
-  // 재전송 중복을 막는 키 (sourceUrl ?? mediaUrl).
+  // 재전송 중복을 막는 키 (sourceUrl ?? mediaUrls[0]).
   // sourceUrl 이 nullable 이 되면서 (messageId, sourceUrl) 유니크로는 NULL 행을 못 막는다.
   dedupeKey String
 
