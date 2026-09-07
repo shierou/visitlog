@@ -15,7 +15,37 @@ export type VisionExtract = {
   brand: string | null;
   /** 핵심 정보 한두 줄 (향 노트, 평점, 가격, 위치 등) */
   memo: string | null;
+  /** 가는 곳인가 사는 것인가. 향수든 맛집이든 같은 흐름으로 처리하기 위한 값 */
+  kind: 'place' | 'item' | null;
+  /** taxonomy 의 분류 이름. 목록에 없는 값이면 호출부가 버린다 */
+  category: string | null;
 };
+
+/**
+ * 여러 장에서 읽어낸 종류·분류를 하나로 모은다.
+ *
+ * 한 게시물은 대개 한 종류다(향수 모음, 맛집 모음…). 그래서 다수결로 정하고,
+ * 분류도 그 종류 안에서 가장 많이 나온 것을 쓴다. 한 장이 튀어도 흔들리지 않는다.
+ */
+export function summarize(extracts: VisionExtract[]): {
+  kind: 'place' | 'item' | null;
+  category: string | null;
+} {
+  const found = extracts.filter((e) => e.found);
+  const top = <T>(values: (T | null)[]): T | null => {
+    const counts = new Map<T, number>();
+    for (const v of values) if (v != null) counts.set(v, (counts.get(v) ?? 0) + 1);
+    let best: T | null = null;
+    let bestCount = 0;
+    for (const [v, c] of counts) if (c > bestCount) [best, bestCount] = [v, c];
+    return best;
+  };
+
+  const kind = top(found.map((e) => e.kind));
+  // 분류는 정해진 종류에 해당하는 것만 센다. 종류가 섞이면 분류도 섞이기 때문이다.
+  const category = top(found.filter((e) => !kind || e.kind === kind).map((e) => e.category));
+  return { kind, category };
+}
 
 /**
  * 인스타 계정 핸들처럼 생긴 이름인가. 멘션 목록에서 줄을 만들면 이름이

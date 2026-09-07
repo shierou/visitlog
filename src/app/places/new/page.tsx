@@ -7,7 +7,8 @@ import PhotoPicker, { stageFiles, uploadStaged, type Staged } from '@/components
 import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
-import { applyExtract, type VisionExtract } from '@/lib/vision-autofill';
+import { applyExtract, summarize, type VisionExtract } from '@/lib/vision-autofill';
+import { CATEGORIES } from '@/lib/taxonomy';
 import { canFetchThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
 
 /**
@@ -262,6 +263,7 @@ function NewPlaceForm() {
     setReading(true);
     let filled = 0;
     let firstError = '';
+    const extracts: VisionExtract[] = [];
     try {
       await Promise.all(
         targets.map(async ({ row, i }) => {
@@ -272,13 +274,14 @@ function NewPlaceForm() {
             const res = await fetch('/api/vision-autofill', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image, kind }),
+              body: JSON.stringify({ image }),
             });
             if (!res.ok) {
               firstError ||= (await res.json().catch(() => null))?.error ?? '읽기에 실패했어요';
               return;
             }
             const extracted: VisionExtract = await res.json();
+            extracts.push(extracted);
             const patch = applyExtract({ name: row.name, memo: row.memo }, extracted);
             if (Object.keys(patch).length) {
               filled += 1;
@@ -289,6 +292,15 @@ function NewPlaceForm() {
           }
         })
       );
+
+      // 향수든 맛집이든 같은 흐름이 되도록, 종류·분류도 읽어낸 값으로 맞춘다.
+      // 사용자가 이미 고른 분류는 건드리지 않는다.
+      const summary = summarize(extracts);
+      if (summary.kind && summary.kind !== kind) setKind(summary.kind);
+      if (summary.category && CATEGORIES.includes(summary.category)) {
+        setCategory((prev) => (prev && summary.kind === kind ? prev : summary.category!));
+      }
+
       if (!silent && filled === 0 && firstError) alert(firstError);
     } finally {
       setReading(false);
@@ -321,6 +333,7 @@ function NewPlaceForm() {
         priority,
         sourceUrl,
         thumbnailUrl,
+        imageUrls: images,
         source: searchParams.get('source'),
         instagramImportId: searchParams.get('importId'),
       };
@@ -331,10 +344,14 @@ function NewPlaceForm() {
           multi
             ? {
                 ...shared,
+                // 링크에서 불러온 슬라이드는 DB 에 없으므로 주소를 그대로 보낸다.
                 items: picked.map((r) => ({
                   name: r.name,
                   memo: r.memo,
-                  imageIndex: r.imageIndex ?? null,
+                  imageUrl:
+                    r.imageIndex !== null && r.imageIndex !== undefined
+                      ? images[r.imageIndex] ?? null
+                      : null,
                 })),
               }
             : { ...shared, name, memo }

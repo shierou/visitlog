@@ -1,11 +1,22 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { applyExtract } from '../src/lib/vision-autofill.ts';
+import { applyExtract, summarize, type VisionExtract } from '../src/lib/vision-autofill.ts';
+
+/** 테스트에서 관심 없는 필드는 기본값으로 채운다. */
+const ex = (partial: Partial<VisionExtract>): VisionExtract => ({
+  found: true,
+  name: null,
+  brand: null,
+  memo: null,
+  kind: null,
+  category: null,
+  ...partial,
+});
 
 test('fills empty name and memo from an extracted slide', () => {
   const patch = applyExtract(
     { name: '', memo: '' },
-    { found: true, name: '앰브레트9', brand: '르라보', memo: '머스크 계열 · 50ml 24만원' }
+    ex({ found: true, name: '앰브레트9', brand: '르라보', memo: '머스크 계열 · 50ml 24만원' })
   );
   assert.deepEqual(patch, { name: '르라보 앰브레트9', memo: '머스크 계열 · 50ml 24만원' });
 });
@@ -14,14 +25,14 @@ test('fills empty name and memo from an extracted slide', () => {
 test('never overwrites what the user already typed', () => {
   const patch = applyExtract(
     { name: '내가 적은 이름', memo: '' },
-    { found: true, name: '딴이름', brand: '딴브랜드', memo: '메모' }
+    ex({ found: true, name: '딴이름', brand: '딴브랜드', memo: '메모' })
   );
   assert.deepEqual(patch, { memo: '메모' });
 
   assert.deepEqual(
     applyExtract(
       { name: '이름', memo: '메모' },
-      { found: true, name: 'x', brand: 'y', memo: 'z' }
+      ex({ found: true, name: 'x', brand: 'y', memo: 'z' })
     ),
     {}
   );
@@ -32,7 +43,7 @@ test('never overwrites what the user already typed', () => {
 test('replaces handle-like placeholder names with the extracted product', () => {
   const patch = applyExtract(
     { name: 'jomalonelondon', memo: '' },
-    { found: true, name: '우드세이지 앤 씨 솔트', brand: '조 말론 런던', memo: '아로마틱 · 쏠티' }
+    ex({ found: true, name: '우드세이지 앤 씨 솔트', brand: '조 말론 런던', memo: '아로마틱 · 쏠티' })
   );
   assert.deepEqual(patch, { name: '조 말론 런던 우드세이지 앤 씨 솔트', memo: '아로마틱 · 쏠티' });
 
@@ -40,7 +51,7 @@ test('replaces handle-like placeholder names with the extracted product', () => 
   assert.deepEqual(
     applyExtract(
       { name: '조말론 향수', memo: '' },
-      { found: true, name: 'x', brand: 'y', memo: null }
+      ex({ found: true, name: 'x', brand: 'y', memo: null })
     ),
     {}
   );
@@ -48,18 +59,38 @@ test('replaces handle-like placeholder names with the extracted product', () => 
 
 test('does nothing for cover or outro slides', () => {
   assert.deepEqual(
-    applyExtract({ name: '', memo: '' }, { found: false, name: null, brand: null, memo: null }),
+    applyExtract({ name: '', memo: '' }, ex({ found: false, name: null, brand: null, memo: null })),
     {}
   );
 });
 
 test('uses whichever of brand and name is present', () => {
   assert.deepEqual(
-    applyExtract({ name: '', memo: '' }, { found: true, name: null, brand: '딥티크', memo: null }),
+    applyExtract({ name: '', memo: '' }, ex({ found: true, name: null, brand: '딥티크', memo: null })),
     { name: '딥티크' }
   );
   assert.deepEqual(
-    applyExtract({ name: '', memo: '' }, { found: true, name: '성수 베라짜뮤', brand: null, memo: null }),
+    applyExtract({ name: '', memo: '' }, ex({ found: true, name: '성수 베라짜뮤', brand: null, memo: null })),
     { name: '성수 베라짜뮤' }
   );
+});
+
+// 한 게시물은 대개 한 종류다. 한 장이 튀어도 전체가 흔들리면 안 된다.
+test('summarizes kind and category by majority', () => {
+  const got = summarize([
+    ex({ kind: 'item', category: '향수' }),
+    ex({ kind: 'item', category: '향수' }),
+    ex({ kind: 'place', category: '맛집' }),
+    ex({ found: false }),
+  ]);
+  assert.deepEqual(got, { kind: 'item', category: '향수' });
+});
+
+// 맛집 모음이면 향수와 똑같은 흐름으로 장소·분류가 정해져야 한다.
+test('works the same for places', () => {
+  assert.deepEqual(
+    summarize([ex({ kind: 'place', category: '맛집' }), ex({ kind: 'place', category: '맛집' })]),
+    { kind: 'place', category: '맛집' }
+  );
+  assert.deepEqual(summarize([ex({ found: false })]), { kind: null, category: null });
 });
