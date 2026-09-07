@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { extractCarouselImages } from '@/lib/instagram-carousel';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -50,11 +51,28 @@ async function probe(label: string, url: string, ua: string) {
 export async function GET() {
   const results = [];
   results.push(await probe('embed+browserUA', `${POST}embed/`, BROWSER_UA));
-  results.push(await probe('embed+simpleUA', `${POST}embed/`, 'visitlog/1.0'));
   results.push(await probe('childRedirect+simpleUA', CHILD, 'visitlog/1.0'));
+
+  // 추출기가 이 본문에서 실제로 몇 장을 뽑는지, 원문이 어떤 꼴인지 그대로 본다.
+  let extraction: Record<string, unknown> = {};
+  try {
+    const res = await fetch(`${POST}embed/`, {
+      headers: { 'user-agent': BROWSER_UA },
+      cache: 'no-store',
+    });
+    const body = await res.text();
+    const at = body.indexOf('display_url');
+    extraction = {
+      extracted: extractCarouselImages(body).length,
+      sample: at === -1 ? null : body.slice(Math.max(0, at - 30), at + 170),
+    };
+  } catch (error) {
+    extraction = { error: String(error) };
+  }
 
   return NextResponse.json({
     region: process.env.VERCEL_REGION ?? null,
     results,
+    extraction,
   });
 }
