@@ -6,7 +6,7 @@ import {
   guessKind,
   guessName,
   guessRegion,
-  splitNumberedPlaces,
+  splitListItems,
 } from '../src/lib/autofill.ts';
 import {
   canFetchThumbnail,
@@ -172,7 +172,7 @@ const 경주_5곳 = `(저장•공유)요즘 뜨는 경주 맛집 5(?)곳 다녀
 #경주맛집 #경주가볼만한곳 #경주`;
 
 test('번호 목록을 장소별로 쪼갠다', () => {
-  const places = splitNumberedPlaces(경주_5곳);
+  const places = splitListItems(경주_5곳);
 
   assert.deepEqual(
     places.map((p) => p.name),
@@ -192,26 +192,63 @@ test('번호 목록을 장소별로 쪼갠다', () => {
 
 test('여러 표기의 번호를 인식한다', () => {
   assert.deepEqual(
-    splitNumberedPlaces('1) 가게A\n메모\n2) 가게B').map((p) => p.name),
+    splitListItems('1) 가게A\n메모\n2) 가게B').map((p) => p.name),
     ['가게A', '가게B']
   );
   assert.deepEqual(
-    splitNumberedPlaces('1️⃣ 가게A\n2️⃣ 가게B').map((p) => p.name),
+    splitListItems('1️⃣ 가게A\n2️⃣ 가게B').map((p) => p.name),
     ['가게A', '가게B']
   );
   assert.deepEqual(
-    splitNumberedPlaces('① 가게A\n② 가게B').map((p) => p.name),
+    splitListItems('① 가게A\n② 가게B').map((p) => p.name),
     ['가게A', '가게B']
   );
 });
 
+test('번호가 없으면 불릿 목록도 본다', () => {
+  const caption = `요즘 인기 향수 모아봤어
+
+- 조 말론 우드 세이지 앤 씨 솔트
+  가볍고 깔끔해서 데일리로 좋아
+- 딥티크 도손
+- 에르메스 트윌리
+
+#향수추천`;
+
+  const items = splitListItems(caption);
+  assert.deepEqual(
+    items.map((i) => i.name),
+    ['조 말론 우드 세이지 앤 씨 솔트', '딥티크 도손', '에르메스 트윌리']
+  );
+  assert.match(items[0].memo, /데일리로 좋아/u);
+  assert.doesNotMatch(items[2].memo, /#향수추천/u);
+
+  assert.deepEqual(
+    splitListItems('• 아이템A\n• 아이템B').map((i) => i.name),
+    ['아이템A', '아이템B']
+  );
+});
+
+test('번호 목록이 있으면 불릿보다 우선한다', () => {
+  // 경주 캡션에는 "-우유망고 10,900원" 같은 가격 줄이 있다.
+  // 불릿이 먼저 걸리면 가격이 항목 이름이 된다.
+  assert.deepEqual(
+    splitListItems(경주_5곳).map((p) => p.name),
+    ['이치니산도', '베이시크', '신라제면', '이사부피자', '대게닭강정']
+  );
+});
+
+test('가격 줄만 있는 건 목록이 아니다', () => {
+  assert.deepEqual(splitListItems('메뉴\n- 15,000원\n- 25,900원'), []);
+});
+
 test('목록이 아니면 빈 배열을 준다', () => {
   // 번호가 1부터 연속하지 않으면 목록이 아니다
-  assert.deepEqual(splitNumberedPlaces('2인 이상 주문가능\n3일차 코스'), []);
+  assert.deepEqual(splitListItems('2인 이상 주문가능\n3일차 코스'), []);
   // 한 곳뿐이면 굳이 나눌 이유가 없다
-  assert.deepEqual(splitNumberedPlaces('1. 이치니산도\n웨이팅 김'), []);
-  assert.deepEqual(splitNumberedPlaces('📍성수 베라짜뮤\n웨이팅 30분'), []);
-  assert.deepEqual(splitNumberedPlaces(null), []);
+  assert.deepEqual(splitListItems('1. 이치니산도\n웨이팅 김'), []);
+  assert.deepEqual(splitListItems('📍성수 베라짜뮤\n웨이팅 30분'), []);
+  assert.deepEqual(splitListItems(null), []);
 });
 
 test('og:image 를 뽑고 HTML 엔티티를 되돌린다', () => {

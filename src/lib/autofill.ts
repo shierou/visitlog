@@ -206,9 +206,17 @@ export function guessName(caption: string | null | undefined): string {
   return candidate.length >= 2 && !isNoise(candidate) ? clamp(candidate) : '';
 }
 
-/* ── 여러 장소가 한 게시물에 담긴 경우 ──────────────────────────── */
+/* ── 여러 개가 한 게시물에 담긴 경우 ──────────────────────────── */
 
 export type SplitPlace = { name: string; memo: string };
+
+/** `- 조 말론` `• 딥티크` 처럼 번호 없이 나열하는 표기 */
+const BULLETS = ['-', '–', '—', '•', '·', '‣', '▪', '※', '✔', '✅', '☑', '▶'];
+
+/** "-우유망고 10,900원" 같은 가격 줄은 항목이 아니다. */
+function isPriceLike(text: string): boolean {
+  return /^[\d.,\s]+(?:원|won|₩|\$)?$/iu.test(text) || /^\d[\d,.]*\s*(?:원|won|₩)$/iu.test(text);
+}
 
 /** `1.` `1)` `1️⃣` `①` 을 항목 머리로 본다. 인스타 캡션이 쓰는 표기가 제각각이다. */
 const CIRCLED = '①②③④⑤⑥⑦⑧⑨⑩';
@@ -233,18 +241,25 @@ function cleanName(raw: string): string {
     .trim();
 }
 
+type Draft = { name: string; body: string[] };
+
+function finish(items: Draft[]): SplitPlace[] {
+  if (items.length < 2) return [];
+  return items.map((item) => ({
+    name: item.name,
+    memo: item.body.join('\n').replace(/\n{3,}/gu, '\n\n').trim(),
+  }));
+}
+
 /**
- * "1. 이치니산도 / 2. 베이시크 …" 처럼 번호가 붙은 목록을 장소별로 쪼갠다.
+ * "1. 이치니산도 / 2. 베이시크 …" 처럼 번호가 붙은 목록.
  *
  * 번호가 1부터 연속으로 올라갈 때만 목록으로 인정한다. 그렇게 안 하면
  * "2인 이상 주문가능", "1일차" 같은 줄이 항목 머리로 잡힌다.
- * 2곳 미만이면 목록이 아니라고 보고 빈 배열을 돌려준다.
  */
-export function splitNumberedPlaces(caption: string | null | undefined): SplitPlace[] {
-  if (!caption) return [];
-
-  const items: { name: string; body: string[] }[] = [];
-  let current: { name: string; body: string[] } | null = null;
+function splitNumbered(caption: string): SplitPlace[] {
+  const items: Draft[] = [];
+  let current: Draft | null = null;
   let expected = 1;
 
   for (const line of caption.split('\n')) {
@@ -270,12 +285,55 @@ export function splitNumberedPlaces(caption: string | null | undefined): SplitPl
   }
 
   if (current) items.push(current);
-  if (items.length < 2) return [];
+  return finish(items);
+}
 
-  return items.map((item) => ({
-    name: item.name,
-    memo: item.body.join('\n').replace(/\n{3,}/gu, '\n\n').trim(),
-  }));
+/**
+ * "- 조 말론 / - 딥티크 …" 처럼 번호 없이 기호로 나열한 목록.
+ *
+ * 번호 목록보다 오탐이 쉬워서(가격 줄이 "-15,000원" 으로 시작하는 등)
+ * 번호 목록이 없을 때만 본다. 같은 기호가 두 번 이상 나와야 목록으로 친다.
+ */
+function splitBulleted(caption: string): SplitPlace[] {
+  for (const bullet of BULLETS) {
+    const items: Draft[] = [];
+    let current: Draft | null = null;
+
+    for (const line of caption.split('\n')) {
+      const trimmed = line.trimStart();
+
+      if (trimmed.startsWith(bullet)) {
+        const name = cleanName(trimmed.slice(bullet.length));
+        if (!name || name.length > 40 || isPriceLike(name)) {
+          current?.body.push(line);
+          continue;
+        }
+        if (current) items.push(current);
+        current = { name, body: [] };
+        continue;
+      }
+
+      if (!current) continue;
+      if (/^\s*#/u.test(line)) break;
+      current.body.push(line);
+    }
+
+    if (current) items.push(current);
+    const result = finish(items);
+    if (result.length) return result;
+  }
+
+  return [];
+}
+
+/**
+ * 한 게시물에 여러 개가 담겨 있으면 항목별로 쪼갠다.
+ * 2개 미만이면 목록이 아니라고 보고 빈 배열을 돌려준다.
+ */
+export function splitListItems(caption: string | null | undefined): SplitPlace[] {
+  if (!caption) return [];
+  const numbered = splitNumbered(caption);
+  return numbered.length ? numbered : splitBulleted(caption);
 }
 
 export type Autofill = { kind: Kind; name: string; category: string; region: string };

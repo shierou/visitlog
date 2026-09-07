@@ -6,7 +6,7 @@ import Link from 'next/link';
 import PhotoPicker, { uploadStaged, type Staged } from '@/components/PhotoPicker';
 import { CategoryChips, RegionSelect, PriorityChips, KindTabs } from '@/components/MetaFields';
 import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
-import { autofillFromCaption, splitNumberedPlaces } from '@/lib/autofill';
+import { autofillFromCaption, splitListItems } from '@/lib/autofill';
 import { canFetchThumbnail } from '@/lib/instagram-thumbnail';
 
 type Row = { name: string; memo: string; checked: boolean };
@@ -19,9 +19,9 @@ function NewPlaceForm() {
   const initialMemo = searchParams.get('memo') ?? '';
   const [guessed] = useState(() => autofillFromCaption(initialMemo));
 
-  // "1. 이치니산도 / 2. 베이시크 …" 처럼 여러 곳이 담긴 게시물이면 나눠서 고르게 한다.
+  // "1. 이치니산도 / 2. 베이시크 …" 처럼 여러 개가 담긴 게시물이면 나눠서 고르게 한다.
   const [split] = useState<Row[]>(() =>
-    splitNumberedPlaces(initialMemo).map((p) => ({ ...p, checked: true }))
+    splitListItems(initialMemo).map((p) => ({ ...p, checked: true }))
   );
   const [rows, setRows] = useState<Row[]>(split);
   const [multi, setMulti] = useState(split.length > 0);
@@ -49,6 +49,25 @@ function NewPlaceForm() {
 
   function updateRow(index: number, patch: Partial<Row>) {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...patch } : r)));
+  }
+
+  function addRow() {
+    setRows((prev) => [...prev, { name: '', memo: '', checked: true }]);
+  }
+
+  function removeRow(index: number) {
+    setRows((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  /**
+   * 자동으로 못 나눈 게시물도 직접 나눌 수 있어야 한다.
+   * 캐러셀 이미지에만 이름이 있고 캡션에는 없는 모음 게시물이 흔하다.
+   */
+  function openMulti() {
+    if (rows.length === 0) {
+      setRows([{ name: name.trim(), memo: '', checked: true }, { name: '', memo: '', checked: true }]);
+    }
+    setMulti(true);
   }
 
   async function submit(e: React.FormEvent) {
@@ -147,8 +166,17 @@ function NewPlaceForm() {
                     <input
                       value={row.name}
                       onChange={(e) => updateRow(i, { name: e.target.value })}
+                      placeholder={`${meta.label} 이름`}
                       className="w-full bg-transparent text-sm font-medium outline-none"
                     />
+                    <button
+                      type="button"
+                      onClick={() => removeRow(i)}
+                      aria-label="이 줄 지우기"
+                      className="shrink-0 px-1 text-neutral-400"
+                    >
+                      ×
+                    </button>
                   </div>
                   {row.memo && (
                     <p className="mt-1.5 line-clamp-2 pl-6 text-xs whitespace-pre-wrap text-neutral-400">
@@ -158,6 +186,14 @@ function NewPlaceForm() {
                 </div>
               ))}
             </div>
+
+            <button
+              type="button"
+              onClick={addRow}
+              className="mt-2 w-full rounded-xl border border-dashed border-neutral-300 py-2.5 text-sm text-neutral-500 dark:border-neutral-700 dark:text-neutral-400"
+            >
+              ＋ 줄 추가
+            </button>
           </div>
         ) : (
           <>
@@ -171,15 +207,15 @@ function NewPlaceForm() {
                 className="mt-1.5 w-full rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />
             </div>
-            {split.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setMulti(true)}
-                className="text-xs text-blue-600 underline"
-              >
-                {split.length}개로 나눠서 등록하기
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={openMulti}
+              className="text-xs text-blue-600 underline"
+            >
+              {split.length > 0
+                ? `${split.length}개로 나눠서 등록하기`
+                : '여러 개로 나눠서 등록하기'}
+            </button>
           </>
         )}
 
