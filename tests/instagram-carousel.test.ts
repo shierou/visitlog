@@ -36,7 +36,9 @@ test('returns empty for pages without carousel JSON', () => {
 // 실제 게시물(Db0TzQAk0w9 ↔ pk 3959877057132055613)로 확인한 대응 관계다.
 test('encodes a media id into the post shortcode', () => {
   assert.equal(shortcodeFromMediaId('3959877057132055613'), 'Db0TzQAk0w9');
-  // 인스타 미디어 ID 범위(15~20자리 숫자)가 아니면 시도하지 않는다
+  // pk 모양(18~20자리)이 아니면 시도하지 않는다. DM 첨부의 asset_id 는 17 자리라
+  // 여기서 걸러진다 — 안 그러면 없는 코드를 만들어 엉뚱한 주소를 저장하게 된다.
+  assert.equal(shortcodeFromMediaId('18099586598365731'), null);
   assert.equal(shortcodeFromMediaId('12345'), null);
   assert.equal(shortcodeFromMediaId('not-a-number'), null);
 });

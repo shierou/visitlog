@@ -88,19 +88,27 @@ export async function fetchCarouselImages(postUrl: string | null | undefined): P
 
 /* ── 첨부 CDN 주소에서 게시물 퍼머링크 역산 ──────────────────────
  *
- * DM 첨부 주소(lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=...)의 asset_id 는
- * 첨부된 미디어(대개 캐러셀 표지)의 숫자 ID 다. 게시물 코드는 미디어 ID 를
- * base64(인스타 알파벳)로 인코딩한 것이라 역산할 수 있고, 표지처럼 자식
- * 미디어의 코드로 접근해도 인스타가 부모 게시물로 리다이렉트해준다.
- * 덕분에 퍼머링크 없이 온 공유도 게시물을 찾아낼 수 있다.
+ * 게시물 코드는 미디어 pk 를 base64(인스타 알파벳)로 인코딩한 것이라, pk 를 알면
+ * 코드를 만들 수 있다. 자식(캐러셀 한 장) 코드로 접근해도 부모 게시물로 리다이렉트된다.
+ *
+ * 다만 DM 첨부(lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=...)의 asset_id 는
+ * pk 가 아니다. 실측해보면 17 자리(예: 18099586598365731)로, 19 자리인 pk
+ * (예: 3959877057132055613) 와 ID 체계가 다르다. 그래서 대부분의 DM 에서는 역산이
+ * 성립하지 않는다 — pk 모양일 때만 시도하고, 결과는 반드시 슬라이드로 검증한 뒤 쓴다.
+ * 퍼머링크가 함께 온 공유(대다수)는 애초에 역산이 필요 없다.
  */
 
 const SHORTCODE_ALPHABET =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
-/** 숫자 미디어 ID → 게시물 코드. 인스타 ID 범위를 벗어나면 null. */
+/**
+ * 미디어 pk → 게시물 코드. pk 모양이 아니면 null.
+ *
+ * 자릿수로 거른다. DM 첨부의 asset_id 는 17 자리라 여기서 걸러지고, 그 덕에
+ * 없는 코드로 인스타를 두드리거나 엉뚱한 주소를 만들어내지 않는다.
+ */
 export function shortcodeFromMediaId(id: string): string | null {
-  if (!/^\d{15,20}$/u.test(id)) return null;
+  if (!/^\d{18,20}$/u.test(id)) return null;
   let n = BigInt(id);
   let code = '';
   while (n > 0n) {
