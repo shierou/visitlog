@@ -12,7 +12,6 @@ export async function middleware(req: NextRequest) {
     '/data-deletion',
     '/manifest.webmanifest',
     '/icon-1024.png',
-    '/api/diag-msg',
   ];
   if (publicPaths.includes(req.nextUrl.pathname)) {
     return NextResponse.next();
