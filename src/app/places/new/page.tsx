@@ -130,6 +130,16 @@ function NewPlaceForm() {
         return;
       }
       applyImages(data.images);
+
+      // 알아낸 링크를 수집함에 남긴다. 원문 메시지로 돌아갈 길이 생기고,
+      // 다음에 이 항목을 열면 아무것도 안 눌러도 슬라이드가 붙는다.
+      if (importId) {
+        void fetch(`/api/instagram-imports/${importId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceUrl }),
+        }).catch(() => {});
+      }
     } catch {
       if (!silent) alert('슬라이드를 가져오지 못했어요');
     } finally {
