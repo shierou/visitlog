@@ -3,7 +3,16 @@ import { AUTH_COOKIE, expectedToken, safeEqual } from '@/lib/auth';
 
 export async function middleware(req: NextRequest) {
   // Meta 검증 엔드포인트와 정책 문서는 로그인 없이 접근할 수 있어야 한다.
-  const publicPaths = ['/api/webhooks/instagram', '/privacy', '/data-deletion'];
+  // manifest 와 아이콘도 열어둔다 — 브라우저가 쿠키 없이 가져가기 때문에
+  // 막아두면 홈 화면 추가가 안 되고, 그러면 인스타 공유 시트에도 안 뜬다.
+  // 둘 다 비밀이 없는 정적 파일이다.
+  const publicPaths = [
+    '/api/webhooks/instagram',
+    '/privacy',
+    '/data-deletion',
+    '/manifest.webmanifest',
+    '/icon-1024.png',
+  ];
   if (publicPaths.includes(req.nextUrl.pathname)) {
     return NextResponse.next();
   }
