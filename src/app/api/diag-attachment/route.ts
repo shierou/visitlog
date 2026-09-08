@@ -21,14 +21,17 @@ export async function GET() {
   const attachment = item?.mediaUrls[0];
   if (!attachment) return NextResponse.json({ note: '퍼머링크 없는 항목이 없음' });
 
-  const out: Record<string, unknown> = {};
+  const out: Record<string, unknown> = { attachmentHost: new URL(attachment).host };
+  const withTimeout = (ms: number) => AbortSignal.timeout(ms);
   try {
+    // 이미지 본문은 필요 없다. 최종 주소만 알면 된다.
     const res = await fetch(attachment, {
+      method: 'HEAD',
       headers: { 'user-agent': 'visitlog/1.0' },
       redirect: 'follow',
       cache: 'no-store',
+      signal: withTimeout(8000),
     });
-    await res.body?.cancel();
 
     const finalUrl = new URL(res.url);
     const cacheKey = finalUrl.searchParams.get('ig_cache_key');
@@ -57,6 +60,7 @@ export async function GET() {
       const page = await fetch(`https://www.instagram.com/p/${code}/`, {
         headers: { 'user-agent': 'visitlog/1.0' },
         redirect: 'follow',
+        signal: withTimeout(8000),
       });
       await page.body?.cancel();
       out.resolvedPath = new URL(page.url).pathname;
