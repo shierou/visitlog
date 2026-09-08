@@ -1,0 +1,26 @@
+{
+  "name": "다녀왔어요",
+  "short_name": "다녀왔어요",
+  "description": "가보고 싶은 곳을 모으고, 다녀온 기록을 남기는 체크리스트",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "icons": [
+    {
+      "src": "/icon-1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "share_target": {
+    "action": "/share",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  }
+}

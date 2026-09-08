@@ -42,7 +42,11 @@ export type InstagramWebhookScan = {
 };
 
 const URL_PATTERN = /https?:\/\/[^\s<>"'`]+/giu;
-const INSTAGRAM_POST_PATH = /^\/(?:p|reel|reels|tv)\//i;
+/**
+ * 게시물 경로. 앞에 사용자명이 붙기도 한다 (`/smeller_news/p/<코드>/`).
+ * "링크 복사"와 공유 시트가 그 형태를 주므로 함께 받아 표준형으로 줄인다.
+ */
+const INSTAGRAM_POST_PATH = /(?:^|\/)(p|reel|reels|tv)\/([A-Za-z0-9_-]+)/iu;
 
 /**
  * DM 으로 "공유"된 게시물이 담겨오는 첨부 타입들.
@@ -68,6 +72,12 @@ function extractUrls(value: string): string[] {
   );
 }
 
+/**
+ * 게시물 주소를 표준형(`https://www.instagram.com/p/<코드>/`)으로 줄인다.
+ *
+ * 사용자명과 추적 파라미터를 떼는 게 핵심이다. 임베드는 표준형에만 슬라이드를
+ * 내주므로, 저장하는 주소를 여기서 한 번 정리해두면 뒤에서 걸릴 일이 없다.
+ */
 export function normalizeInstagramPostUrl(value: string): string | null {
   try {
     const url = new URL(value);
@@ -75,17 +85,10 @@ export function normalizeInstagramPostUrl(value: string): string | null {
 
     const hostname = url.hostname.toLowerCase().replace(/^www\./, '');
     if (hostname !== 'instagram.com' && !hostname.endsWith('.instagram.com')) return null;
-    if (!INSTAGRAM_POST_PATH.test(url.pathname)) return null;
 
-    url.protocol = 'https:';
-    url.hostname = 'www.instagram.com';
-    url.username = '';
-    url.password = '';
-    url.port = '';
-    url.search = '';
-    url.hash = '';
-    url.pathname = `${url.pathname.replace(/\/+$/u, '')}/`;
-    return url.toString();
+    const m = url.pathname.match(INSTAGRAM_POST_PATH);
+    if (!m) return null;
+    return `https://www.instagram.com/${m[1].toLowerCase()}/${m[2]}/`;
   } catch {
     return null;
   }
