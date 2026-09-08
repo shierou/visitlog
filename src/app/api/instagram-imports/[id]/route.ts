@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { fetchCarouselImages, resolvePostUrl } from '@/lib/instagram-carousel';
+import { normalizeInstagramPostUrl } from '@/lib/instagram-webhook';
 
 // 임베드 페이지를 기다리는 시간(최대 8초)이 있어 기본 시간이 빠듯하다.
 export const maxDuration = 30;
@@ -47,8 +48,18 @@ export async function GET(_req: NextRequest, { params }: Context) {
 export async function PATCH(req: NextRequest, { params }: Context) {
   const { id } = await params;
   const body = await req.json();
-  if (body?.status !== 'ignored' && body?.status !== 'pending') {
-    return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+
+  const data: { status?: string; sourceUrl?: string } = {};
+  if (body?.status === 'ignored' || body?.status === 'pending') data.status = body.status;
+  // 폼에서 알아낸 게시물 주소를 되돌려 저장한다. 한 번 알아내면 다음부터는
+  // 수집함이 링크를 들고 있으므로 슬라이드가 저절로 붙고, 원본 열기도 살아난다.
+  if (typeof body?.sourceUrl === 'string') {
+    const url = normalizeInstagramPostUrl(body.sourceUrl);
+    if (!url) return NextResponse.json({ error: '인스타 게시물 주소가 아니에요' }, { status: 400 });
+    data.sourceUrl = url;
+  }
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json({ error: '바꿀 값이 없어요' }, { status: 400 });
   }
 
   const item = await db.instagramImport.findFirst({
@@ -57,10 +68,7 @@ export async function PATCH(req: NextRequest, { params }: Context) {
   });
   if (!item) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-  const updated = await db.instagramImport.update({
-    where: { id: item.id },
-    data: { status: body.status },
-  });
+  const updated = await db.instagramImport.update({ where: { id: item.id }, data });
   return NextResponse.json(updated);
 }
 
