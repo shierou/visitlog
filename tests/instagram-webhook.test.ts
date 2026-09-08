@@ -155,6 +155,8 @@ test('collects a reel shared as an ig_reel attachment with a CDN url', () => {
   // 본문이 없으면 릴스 캡션을 메모 대용으로 남긴다.
   assert.equal(scan.imports[0]?.messageText, '성수동 파스타 맛집');
   assert.deepEqual(scan.attachmentTypes, ['ig_reel']);
+  // 캐러셀 공유에 퍼머링크 필드가 있는지 로그로 찾기 위해 필드 이름을 모아둔다.
+  assert.deepEqual(scan.attachmentFields.sort(), ['reel_video_id', 'title', 'url']);
 });
 
 test('reports why an event was skipped instead of dropping it silently', () => {

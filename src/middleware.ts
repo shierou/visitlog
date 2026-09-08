@@ -3,13 +3,7 @@ import { AUTH_COOKIE, expectedToken, safeEqual } from '@/lib/auth';
 
 export async function middleware(req: NextRequest) {
   // Meta 검증 엔드포인트와 정책 문서는 로그인 없이 접근할 수 있어야 한다.
-  // /api/diag-attachment 는 임시 진단용(입력 없음). 확인 후 삭제한다.
-  const publicPaths = [
-    '/api/webhooks/instagram',
-    '/privacy',
-    '/data-deletion',
-    '/api/diag-attachment',
-  ];
+  const publicPaths = ['/api/webhooks/instagram', '/privacy', '/data-deletion'];
   if (publicPaths.includes(req.nextUrl.pathname)) {
     return NextResponse.next();
   }

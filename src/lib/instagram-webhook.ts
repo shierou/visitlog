@@ -31,6 +31,12 @@ export type InstagramWebhookScan = {
   skipped: Record<string, number>;
   /** 실제로 들어온 첨부 type 목록. 미지원 타입을 찾는 데 쓴다. */
   attachmentTypes: string[];
+  /**
+   * 첨부 payload 에 담겨온 필드 이름들(값은 담지 않는다).
+   * 캐러셀 공유는 퍼머링크 없이 CDN 주소만 오는데, Meta 가 다른 필드에 링크를
+   * 넣어주는지 로그로 확인하려고 남긴다. 있으면 수동 붙여넣기를 없앨 수 있다.
+   */
+  attachmentFields: string[];
   /** payload 가 알려준 수신 계정 ID. INSTAGRAM_ACCOUNT_ID 대조용 */
   accountIds: string[];
 };
@@ -133,6 +139,7 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
     eventCount: 0,
     skipped: {},
     attachmentTypes: [],
+    attachmentFields: [],
     accountIds: [],
   };
   const skip = (reason: string) => {
@@ -154,6 +161,7 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
 
   const imports = scan.imports;
   const attachmentTypes = new Set<string>();
+  const attachmentFields = new Set<string>();
   const accountIds = new Set<string>();
   scan.entryCount = root.entry.length;
 
@@ -205,6 +213,7 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
           if (attachmentType) attachmentTypes.add(attachmentType);
 
           const attachmentPayload = asObject(attachment?.payload);
+          for (const key of Object.keys(attachmentPayload ?? {})) attachmentFields.add(key);
           const attachmentUrl = asString(attachmentPayload?.url);
           if (!attachmentUrl) continue;
 
@@ -272,6 +281,7 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
   }
 
   scan.attachmentTypes = [...attachmentTypes];
+  scan.attachmentFields = [...attachmentFields];
   scan.accountIds = [...accountIds];
   return scan;
 }

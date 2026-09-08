@@ -103,12 +103,12 @@ function NewPlaceForm() {
   const slidesTriedFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!multi || images.length > 1 || !isInstagramPostUrl(sourceUrl)) return;
+    if (images.length > 1 || !isInstagramPostUrl(sourceUrl)) return;
     if (slidesTriedFor.current === sourceUrl) return;
     slidesTriedFor.current = sourceUrl;
     void loadSlidesFromLink(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sourceUrl, multi, images.length]);
+  }, [sourceUrl, images.length]);
 
   /**
    * 링크 칸에 붙여넣은 게시물 주소에서 캐러셀 슬라이드 전체를 가져온다.
@@ -134,6 +134,21 @@ function NewPlaceForm() {
       if (!silent) alert('슬라이드를 가져오지 못했어요');
     } finally {
       setLoadingSlides(false);
+    }
+  }
+
+  /**
+   * 클립보드의 게시물 주소를 링크 칸에 넣는다.
+   * 인스타에서 "링크 복사"만 해두면 여기서 한 번 눌러 끝난다 —
+   * 주소창에 손으로 붙여넣는 것보다 짧다. 권한이 없으면 조용히 넘어간다.
+   */
+  async function pasteLinkFromClipboard() {
+    try {
+      const text = (await navigator.clipboard.readText()).trim();
+      if (isInstagramPostUrl(text)) setSourceUrl(text);
+      else alert('클립보드에 인스타 게시물 주소가 없어요. 게시물에서 "링크 복사" 후 다시 눌러주세요.');
+    } catch {
+      alert('클립보드를 읽지 못했어요. 아래 링크 칸에 직접 붙여넣어 주세요.');
     }
   }
 
@@ -423,9 +438,18 @@ function NewPlaceForm() {
               /* DM 공유는 표지 한 장만 온다. 슬라이드는 게시물 링크의 임베드에서 가져온다. */
               <div className="mt-1">
                 <p className="text-xs text-amber-600 dark:text-amber-500">
-                  DM에 담겨온 이미지는 표지뿐이에요. 아래 링크 칸에 게시물 주소를
-                  붙여넣으면 슬라이드를 자동으로 불러와 항목마다 붙여드려요.
+                  DM에 담겨온 이미지는 표지뿐이에요. 인스타에서 이 게시물의
+                  &ldquo;링크 복사&rdquo;를 누른 뒤 아래 버튼을 누르면 슬라이드를 항목마다
+                  붙여드려요.
                 </p>
+                <button
+                  type="button"
+                  disabled={loadingSlides}
+                  onClick={() => void pasteLinkFromClipboard()}
+                  className="mt-1.5 w-full rounded-xl bg-neutral-100 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300"
+                >
+                  {loadingSlides ? '슬라이드 불러오는 중…' : '📋 복사한 링크로 슬라이드 채우기'}
+                </button>
                 {isInstagramPostUrl(sourceUrl) && (
                   <button
                     type="button"
@@ -641,6 +665,18 @@ function NewPlaceForm() {
                 className="mt-1.5 w-full resize-none rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />
             </div>
+
+            {images.length <= 1 && isInstagramPostUrl(thumbnailUrl || sourceUrl) === false && (
+              /* 하나로 등록해도 슬라이드가 다 들어가야 한다. 링크만 있으면 전부 붙는다. */
+              <button
+                type="button"
+                disabled={loadingSlides}
+                onClick={() => void pasteLinkFromClipboard()}
+                className="w-full rounded-xl bg-neutral-100 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50 dark:bg-neutral-800 dark:text-neutral-300"
+              >
+                {loadingSlides ? '슬라이드 불러오는 중…' : '📋 복사한 링크로 사진 모두 가져오기'}
+              </button>
+            )}
 
             <PhotoPicker
               label="인스타 스크린샷"

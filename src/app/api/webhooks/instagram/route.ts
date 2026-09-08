@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     entries: scan.entryCount,
     events: scan.eventCount,
     attachmentTypes: scan.attachmentTypes,
+    attachmentFields: scan.attachmentFields,
     skipped: scan.skipped,
     matched: scan.imports.length,
     droppedByAccountFilter,
