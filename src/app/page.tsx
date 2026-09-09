@@ -99,19 +99,28 @@ export default async function Home({
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
-        <div className="px-4 pb-3 pt-5">
+        <div className="flex items-center justify-between gap-2 px-4 pb-3 pt-5">
           <h1 className="text-xl font-bold">다녀왔어요</h1>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            가고 싶은 곳 {wishCount} · 배달 {deliveryCount} · 사고 싶은 것 {itemCount}
-          </p>
+          {/* 수신함은 거르는 탭이 아니라 처리할 일감이다. 밀린 게 있으면 눈에 띄게. */}
+          <Link
+            href="/instagram"
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              inboxCount > 0
+                ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+                : 'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+            }`}
+          >
+            분류해주세요 {inboxCount}
+          </Link>
         </div>
 
         <nav className="flex gap-1 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {/* 탭은 짧게. 긴 이름(배달하고 싶은 곳 …)은 등록 화면 제목에서 쓴다. */}
           {[
-            { key: 'wishlist', label: `가고 싶은 곳 ${wishCount}` },
-            { key: 'visited', label: `다녀온 곳 ${visitedCount}` },
-            { key: 'delivery', label: `배달하고 싶은 곳 ${deliveryCount}` },
-            { key: 'items', label: `사고 싶어요 ${itemCount}` },
+            { key: 'wishlist', label: '가고싶어요', count: wishCount },
+            { key: 'visited', label: '다녀온곳', count: visitedCount },
+            { key: 'delivery', label: '배달', count: deliveryCount },
+            { key: 'items', label: '사고싶어요', count: itemCount },
           ].map((t) => (
             <Link
               key={t.key}
@@ -122,21 +131,16 @@ export default async function Home({
                 ...(priority && { priority }),
                 tab: t.key,
               })}`}
-              className={`shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium whitespace-nowrap ${
+              className={`shrink-0 rounded-t-lg px-2.5 py-2 text-sm font-medium whitespace-nowrap ${
                 tab === t.key
                   ? 'border-b-2 border-neutral-900 text-neutral-900 dark:border-white dark:text-white'
                   : 'text-neutral-400'
               }`}
             >
-              {t.label}
+              {t.label}{' '}
+              <span className="text-xs tabular-nums">{t.count}</span>
             </Link>
           ))}
-          <Link
-            href="/instagram"
-            className="shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-neutral-400"
-          >
-            분류해주세요 {inboxCount}
-          </Link>
         </nav>
       </header>
 

@@ -14,42 +14,25 @@ function formatReceivedAt(date: Date): string {
 }
 
 export default async function InstagramInbox() {
-  const [items, wishCount, visitedCount] = await Promise.all([
-    db.instagramImport.findMany({
-      where: { ownerId: CURRENT_OWNER, status: 'pending' },
-      orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
-    }),
-    db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'wishlist' } }),
-    db.place.count({ where: { ownerId: CURRENT_OWNER, status: 'visited' } }),
-  ]);
+  const items = await db.instagramImport.findMany({
+    where: { ownerId: CURRENT_OWNER, status: 'pending' },
+    orderBy: [{ receivedAt: 'desc' }, { createdAt: 'desc' }],
+  });
 
   return (
     <>
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
-        <div className="px-4 pb-3 pt-5">
-          <h1 className="text-xl font-bold">분류해주세요</h1>
-          <p className="mt-0.5 text-xs text-neutral-500">
-            DM으로 들어온 것 {items.length}개 · 가고 싶은 곳 / 배달 / 사고 싶어요로 나눠주세요
-          </p>
+        <div className="flex items-center justify-between gap-2 px-4 pb-4 pt-5">
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold">분류해주세요</h1>
+            <p className="mt-0.5 text-xs text-neutral-500">
+              DM으로 들어온 것 {items.length}개 · 가고싶어요 / 배달 / 사고싶어요로 나눠주세요
+            </p>
+          </div>
+          <Link href="/" className="shrink-0 text-sm text-neutral-500">
+            목록 →
+          </Link>
         </div>
-
-        <nav className="flex gap-1 px-3">
-          <Link
-            href="/?tab=wishlist"
-            className="rounded-t-lg px-3 py-2 text-sm font-medium text-neutral-400"
-          >
-            가고 싶은 곳 {wishCount}
-          </Link>
-          <Link
-            href="/?tab=visited"
-            className="rounded-t-lg px-3 py-2 text-sm font-medium text-neutral-400"
-          >
-            다녀온 곳 {visitedCount}
-          </Link>
-          <span className="rounded-t-lg border-b-2 border-neutral-900 px-3 py-2 text-sm font-medium whitespace-nowrap text-neutral-900 dark:border-white dark:text-white">
-            분류해주세요 {items.length}
-          </span>
-        </nav>
       </header>
 
       <div className="space-y-3 px-4 py-4">
