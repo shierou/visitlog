@@ -9,11 +9,7 @@ import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
 import { applyExtract, summarize, type VisionExtract } from '@/lib/vision-autofill';
 import { CATEGORIES } from '@/lib/taxonomy';
-import {
-  canFetchThumbnail,
-  isInstagramMediaUrl,
-  isInstagramPostUrl,
-} from '@/lib/instagram-thumbnail';
+import { canFetchThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
 
 /**
  * 여러 개로 나눠 등록할 때의 한 줄.
@@ -50,11 +46,9 @@ function NewPlaceForm() {
   const [category, setCategory] = useState(guessed.category);
   const [region, setRegion] = useState(guessed.region);
   const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
-  // 퍼머링크가 없으면 DM 이 준 주소라도 넣어둔다. 빈 칸이면 원문으로 돌아갈
-  // 길이 사라지고, 저장할 때도 아무 흔적이 남지 않는다.
-  const [sourceUrl, setSourceUrl] = useState(
-    () => searchParams.get('sourceUrl') || searchParams.get('thumbnailUrl') || ''
-  );
+  // 링크 칸은 게시물 주소 전용이다. DM 이 준 이미지 주소는 아래에 따로 보여주고
+  // 저장도 되므로, 여기에 섞어 넣어 게시물 주소 넣을 자리를 막지 않는다.
+  const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
   // 수집함이 넘겨준 썸네일 원본(CDN 주소). 사용자가 고칠 값이 아니라 입력칸 없이 들고만 간다.
   const [thumbnailUrl] = useState(() => searchParams.get('thumbnailUrl') ?? '');
 
@@ -163,10 +157,19 @@ function NewPlaceForm() {
   async function pasteLinkFromClipboard() {
     try {
       const text = (await navigator.clipboard.readText()).trim();
-      if (isInstagramPostUrl(text)) setSourceUrl(text);
-      else alert('클립보드에 인스타 게시물 주소가 없어요. 게시물에서 "링크 복사" 후 다시 눌러주세요.');
+      if (isInstagramPostUrl(text)) {
+        setSourceUrl(text);
+        setProblem('');
+        return;
+      }
+      // 무엇이 잘못됐는지 갈라줘야 다음에 무엇을 할지 알 수 있다.
+      setProblem(
+        text
+          ? `클립보드에 있는 건 게시물 주소가 아니에요: ${text.slice(0, 80)}`
+          : '클립보드가 비어 있어요. 인스타 게시물에서 "링크 복사"를 먼저 눌러주세요.'
+      );
     } catch {
-      alert('클립보드를 읽지 못했어요. 아래 링크 칸에 직접 붙여넣어 주세요.');
+      setProblem('클립보드를 읽지 못했어요(권한). 아래 링크 칸에 직접 붙여넣어 주세요.');
     }
   }
 
@@ -730,20 +733,29 @@ function NewPlaceForm() {
         )}
 
         <div>
-          <label className="text-sm font-medium">링크 (선택)</label>
+          <label className="text-sm font-medium">게시물 링크 (선택)</label>
+          <p className="mt-0.5 text-xs text-neutral-400">
+            이 주소가 있어야 게시물 사진을 항목마다 나눠 붙일 수 있어요.
+          </p>
           <input
             value={sourceUrl}
             onChange={(e) => setSourceUrl(e.target.value)}
-            placeholder="https://instagram.com/p/..."
+            onFocus={(e) => e.target.select()}
+            placeholder="https://www.instagram.com/p/..."
             inputMode="url"
             className="mt-1.5 w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none dark:bg-neutral-800"
           />
-          {/* DM 이 준 주소는 이미지라 시간이 지나면 죽는다. 게시물 주소로 바꾸면
-              슬라이드까지 따라오므로, 무엇이 들어 있는지 알려준다. */}
-          {isInstagramMediaUrl(sourceUrl) && (
-            <p className="mt-1 text-xs text-neutral-400">
-              DM에 담겨온 이미지 주소예요. 게시물 주소로 바꾸면 슬라이드가 전부 붙어요.
-            </p>
+
+          {/* DM 이 준 이미지 주소. 링크 칸을 차지하지 않되 사라지지도 않게 —
+              저장하면 이 항목에 함께 남는다. */}
+          {thumbnailUrl && (
+            <div className="mt-3">
+              <p className="text-xs font-medium text-neutral-500">DM에서 받은 주소 (이미지)</p>
+              <p className="mt-0.5 truncate text-xs text-neutral-400">{thumbnailUrl}</p>
+              <p className="mt-0.5 text-xs text-neutral-400">
+                저장할 때 함께 남아요. 다만 이미지 한 장이라 시간이 지나면 열리지 않을 수 있어요.
+              </p>
+            </div>
           )}
         </div>
       </div>
