@@ -126,7 +126,7 @@ function NewPlaceForm() {
       });
       const data = await res.json().catch(() => null);
       if (!res.ok || !Array.isArray(data?.images)) {
-        if (!silent) alert(data?.error ?? '슬라이드를 가져오지 못했어요');
+        if (!silent) setProblem(data?.error ?? '슬라이드를 가져오지 못했어요');
         return;
       }
       applyImages(data.images);
@@ -140,8 +140,8 @@ function NewPlaceForm() {
           body: JSON.stringify({ sourceUrl }),
         }).catch(() => {});
       }
-    } catch {
-      if (!silent) alert('슬라이드를 가져오지 못했어요');
+    } catch (err) {
+      if (!silent) setProblem(`슬라이드를 가져오지 못했어요: ${String(err).slice(0, 200)}`);
     } finally {
       setLoadingSlides(false);
     }
@@ -178,12 +178,13 @@ function NewPlaceForm() {
   const [reading, setReading] = useState(false);
   // 슬라이드가 방금 짝지어져서 자동 읽기가 예약됐는가
   const [autoRead, setAutoRead] = useState(false);
+  // 마지막 실패 사유. 알림창은 닫으면 사라져서 화면에 남긴다.
+  const [problem, setProblem] = useState('');
 
   useEffect(() => {
     if (!autoRead || reading) return;
     setAutoRead(false);
-    // 자동 실행은 조용히 — 키가 없거나 실패하면 버튼이 남아 있으니 거기서 알린다.
-    void readFromImages(true);
+    void readFromImages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRead, reading]);
   // 사진을 리사이즈·압축하는 동안 같은 파일을 두 번 밀어 넣지 않게 막는다.
@@ -281,11 +282,12 @@ function NewPlaceForm() {
    * 줄마다 병렬로 부르므로 전체 시간은 한 장 읽는 시간과 비슷하다.
    * 사용자가 이미 적은 값은 applyExtract 가 건드리지 않는다.
    */
-  async function readFromImages(silent = false) {
+  async function readFromImages() {
     if (reading) return;
     const targets = rows.map((row, i) => ({ row, i })).filter(({ row }) => readable(row));
     if (targets.length === 0) return;
     setReading(true);
+    setProblem('');
     let filled = 0;
     let firstError = '';
     const extracts: VisionExtract[] = [];
@@ -326,7 +328,7 @@ function NewPlaceForm() {
         setCategory((prev) => (prev && summary.kind === kind ? prev : summary.category!));
       }
 
-      if (!silent && filled === 0 && firstError) alert(firstError);
+      if (filled === 0 && firstError) setProblem(firstError);
     } finally {
       setReading(false);
     }
@@ -586,6 +588,12 @@ function NewPlaceForm() {
               >
                 {reading ? '사진 읽는 중…' : '✨ 사진에서 이름·정보 읽어오기'}
               </button>
+            )}
+
+            {problem && (
+              <p className="mt-2 rounded-xl bg-red-50 px-3 py-2 text-xs break-all text-red-600 dark:bg-red-950 dark:text-red-400">
+                {problem}
+              </p>
             )}
 
             {unnamed > 0 && (
