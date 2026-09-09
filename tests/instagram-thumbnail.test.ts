@@ -55,3 +55,15 @@ test('reads og:image with either attribute order', () => {
   );
   assert.equal(extractOgImage('<html>no meta</html>'), null);
 });
+
+// 링크 칸에는 DM 이 준 CDN 주소가 기본으로 들어간다. 그게 "원본 링크" 인 척하면
+// 처음에 고쳤던 깨진 링크 문제가 되살아난다. 라벨은 주소 종류를 따라가야 한다.
+test('labels by the kind of URL, not by which field it came from', () => {
+  const cdn = 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1';
+  assert.deepEqual(outboundLink(cdn, null), { href: cdn, expiring: true });
+  assert.deepEqual(outboundLink(cdn, cdn), { href: cdn, expiring: true });
+
+  // 게시물 주소는 만료되지 않는다
+  const post = 'https://www.instagram.com/p/ABC/';
+  assert.deepEqual(outboundLink(post, cdn), { href: post, expiring: false });
+});

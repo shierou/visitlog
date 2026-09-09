@@ -9,7 +9,11 @@ import { PRIORITY, kindMeta, type Kind } from '@/lib/taxonomy';
 import { autofillFromCaption, splitListItems } from '@/lib/autofill';
 import { applyExtract, summarize, type VisionExtract } from '@/lib/vision-autofill';
 import { CATEGORIES } from '@/lib/taxonomy';
-import { canFetchThumbnail, isInstagramPostUrl } from '@/lib/instagram-thumbnail';
+import {
+  canFetchThumbnail,
+  isInstagramMediaUrl,
+  isInstagramPostUrl,
+} from '@/lib/instagram-thumbnail';
 
 /**
  * 여러 개로 나눠 등록할 때의 한 줄.
@@ -46,7 +50,11 @@ function NewPlaceForm() {
   const [category, setCategory] = useState(guessed.category);
   const [region, setRegion] = useState(guessed.region);
   const [priority, setPriority] = useState<number>(PRIORITY.NORMAL);
-  const [sourceUrl, setSourceUrl] = useState(() => searchParams.get('sourceUrl') ?? '');
+  // 퍼머링크가 없으면 DM 이 준 주소라도 넣어둔다. 빈 칸이면 원문으로 돌아갈
+  // 길이 사라지고, 저장할 때도 아무 흔적이 남지 않는다.
+  const [sourceUrl, setSourceUrl] = useState(
+    () => searchParams.get('sourceUrl') || searchParams.get('thumbnailUrl') || ''
+  );
   // 수집함이 넘겨준 썸네일 원본(CDN 주소). 사용자가 고칠 값이 아니라 입력칸 없이 들고만 간다.
   const [thumbnailUrl] = useState(() => searchParams.get('thumbnailUrl') ?? '');
 
@@ -730,6 +738,13 @@ function NewPlaceForm() {
             inputMode="url"
             className="mt-1.5 w-full rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none dark:bg-neutral-800"
           />
+          {/* DM 이 준 주소는 이미지라 시간이 지나면 죽는다. 게시물 주소로 바꾸면
+              슬라이드까지 따라오므로, 무엇이 들어 있는지 알려준다. */}
+          {isInstagramMediaUrl(sourceUrl) && (
+            <p className="mt-1 text-xs text-neutral-400">
+              DM에 담겨온 이미지 주소예요. 게시물 주소로 바꾸면 슬라이드가 전부 붙어요.
+            </p>
+          )}
         </div>
       </div>
     </form>

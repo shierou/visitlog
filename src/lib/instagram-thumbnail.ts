@@ -72,9 +72,11 @@ export function outboundLink(
   sourceUrl: string | null | undefined,
   thumbnailUrl: string | null | undefined
 ): OutboundLink | null {
-  if (sourceUrl) return { href: sourceUrl, expiring: false };
-  if (thumbnailUrl) return { href: thumbnailUrl, expiring: true };
-  return null;
+  const href = sourceUrl || thumbnailUrl;
+  if (!href) return null;
+  // 만료 여부는 주소 자체가 말해준다. 링크 칸에 CDN 주소가 들어와 있어도
+  // "원본 링크" 라고 부르지 않게 되고, 그래서 깨진 링크로 오해할 일이 없다.
+  return { href, expiring: isInstagramMediaUrl(href) };
 }
 
 /** HTML 에서 og:image 값을 뽑는다. 속성 순서가 뒤집힌 경우도 있어서 둘 다 본다. */
