@@ -335,3 +335,20 @@ test('같은 브랜드를 두 번 멘션해도 줄은 하나다', () => {
     ['a', 'b', 'c']
   );
 });
+
+// 배달은 장소의 한 갈래라, "맛집" 만으로는 가는 곳인지 시키는 곳인지 알 수 없다.
+// 배달앱 이름이나 "시켜 먹는" 표현이 있을 때만 배달로 본다.
+test('tells delivery apart from places to visit', () => {
+  assert.equal(guessKind('배민에서 시켜먹은 치킨 존맛'), 'delivery');
+  assert.equal(guessKind('쿠팡이츠 야식 추천'), 'delivery');
+  // 그냥 맛집 소개는 가는 곳이다
+  assert.equal(guessKind('성수동 파스타 맛집 웨이팅 필수'), 'place');
+  // 물건이 먼저다 — 향수 게시물이 배달로 새면 안 된다
+  assert.equal(guessKind('집에서 쓰는 향수 추천'), 'item');
+});
+
+test('guesses delivery food categories', () => {
+  assert.equal(guessCategory('배민 치킨 시켜먹었어요', 'delivery'), '치킨');
+  assert.equal(guessCategory('족발 보쌈 야식', 'delivery'), '고기');
+  assert.equal(guessCategory('아무 말', 'delivery'), '');
+});

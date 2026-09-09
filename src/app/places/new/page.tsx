@@ -397,7 +397,9 @@ function NewPlaceForm() {
               : Promise.resolve()
           )
         );
-        router.push(kind === 'item' ? '/?tab=items' : '/?tab=wishlist');
+        router.push(
+          kind === 'item' ? '/?tab=items' : kind === 'delivery' ? '/?tab=delivery' : '/?tab=wishlist'
+        );
       } else {
         await uploadStaged(shots, result.id, 'reference');
         router.push(`/places/${result.id}`);
@@ -639,7 +641,13 @@ function NewPlaceForm() {
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={kind === 'item' ? '예: 르라보 앰브레트9' : '예: 성수 베라짜뮤'}
+                placeholder={
+                  kind === 'item'
+                    ? '예: 르라보 앰브레트9'
+                    : kind === 'delivery'
+                      ? '예: 교촌치킨 성수점'
+                      : '예: 성수 베라짜뮤'
+                }
                 className="mt-1.5 w-full rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />
             </div>
@@ -678,7 +686,9 @@ function NewPlaceForm() {
                 placeholder={
                   kind === 'item'
                     ? '어디서 파는지, 가격, 향 계열…'
-                    : '뭐가 맛있다더라, 예약 필요, 웨이팅 길다…'
+                    : kind === 'delivery'
+                      ? '뭐가 맛있다더라, 최소주문, 배달비…'
+                      : '뭐가 맛있다더라, 예약 필요, 웨이팅 길다…'
                 }
                 className="mt-1.5 w-full resize-none rounded-xl bg-neutral-100 px-4 py-3 outline-none dark:bg-neutral-800"
               />

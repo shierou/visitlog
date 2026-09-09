@@ -29,7 +29,8 @@ export default async function PlaceDetail({ params }: { params: Promise<{ id: st
   const firstVisit = place.visits.at(-1);
   const pr = priorityMeta(place.priority);
   const meta = kindMeta(place.kind);
-  const isItem = place.kind === 'item';
+  // 방문 기록을 쓰지 않는 종류 — 물건(샀어요)과 배달(시켜봤어요).
+  const isItem = place.kind === 'item' || place.kind === 'delivery';
   // 퍼머링크가 없으면 DM 으로 온 이미지라도 열 수 있게 한다.
   const link = outboundLink(place.sourceUrl, place.thumbnailUrl);
 

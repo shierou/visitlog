@@ -10,11 +10,14 @@ type Group = { label: string; items: readonly string[] };
 
 /**
  * 저장하는 대상의 종류.
- *   place = 가고 싶은 곳   item = 사고 싶은 것(향수·의류 등)
- * 인스타 DM 으로 장소만 오는 게 아니라 제품 소개도 넘어와서 갈랐다.
+ *   place    = 가고 싶은 곳
+ *   delivery = 배달하고 싶은 곳 (가는 게 아니라 시켜 먹는 곳)
+ *   item     = 사고 싶은 것(향수·의류 등)
+ *
+ * 인스타 DM 으로 장소만 오는 게 아니라 제품 소개도, 배달 맛집도 넘어와서 갈랐다.
  * 겹치는 필드가 대부분이라 테이블은 하나로 두고 라벨만 다르게 쓴다.
  */
-export type Kind = 'place' | 'item';
+export type Kind = 'place' | 'item' | 'delivery';
 
 export type KindMeta = {
   value: Kind;
@@ -36,6 +39,14 @@ export const KINDS: readonly KindMeta[] = [
     emptyIcon: '📍',
   },
   {
+    value: 'delivery',
+    label: '배달',
+    wishLabel: '배달하고 싶은 곳',
+    doneLabel: '시켜본 곳',
+    doneVerb: '시켜봤어요',
+    emptyIcon: '🛵',
+  },
+  {
     value: 'item',
     label: '물건',
     wishLabel: '사고 싶은 것',
@@ -50,7 +61,7 @@ export function kindMeta(value: string | null | undefined): KindMeta {
 }
 
 export function normalizeKind(raw: unknown): Kind {
-  return raw === 'item' ? 'item' : 'place';
+  return raw === 'item' || raw === 'delivery' ? raw : 'place';
 }
 
 export const PLACE_CATEGORY_GROUPS: readonly Group[] = [
@@ -58,6 +69,14 @@ export const PLACE_CATEGORY_GROUPS: readonly Group[] = [
   { label: '보기', items: ['전시', '영화관', '공연', '팝업', '축제'] },
   { label: '놀기', items: ['방탈출', '보드게임', '액티비티', '산책', '쇼핑'] },
   { label: '그 외', items: ['숙소', '기타'] },
+];
+
+/** 배달은 음식이 거의 전부라 장소 분류와 따로 둔다. */
+export const DELIVERY_CATEGORY_GROUPS: readonly Group[] = [
+  { label: '끼니', items: ['한식', '중식', '일식', '양식', '분식'] },
+  { label: '든든', items: ['치킨', '피자', '버거', '고기', '찜·탕'] },
+  { label: '가볍게', items: ['야식', '샐러드', '디저트', '카페'] },
+  { label: '그 외', items: ['기타 배달'] },
 ];
 
 export const ITEM_CATEGORY_GROUPS: readonly Group[] = [
@@ -68,7 +87,9 @@ export const ITEM_CATEGORY_GROUPS: readonly Group[] = [
 ];
 
 export function categoryGroups(kind: string | null | undefined): readonly Group[] {
-  return kind === 'item' ? ITEM_CATEGORY_GROUPS : PLACE_CATEGORY_GROUPS;
+  if (kind === 'item') return ITEM_CATEGORY_GROUPS;
+  if (kind === 'delivery') return DELIVERY_CATEGORY_GROUPS;
+  return PLACE_CATEGORY_GROUPS;
 }
 
 /** 하위 호환. 기존 호출부와 자동 채움의 허용 목록 검사에 쓴다. */
@@ -76,7 +97,14 @@ export const CATEGORY_GROUPS = PLACE_CATEGORY_GROUPS;
 
 export const PLACE_CATEGORIES: readonly string[] = PLACE_CATEGORY_GROUPS.flatMap((g) => g.items);
 export const ITEM_CATEGORIES: readonly string[] = ITEM_CATEGORY_GROUPS.flatMap((g) => g.items);
-export const CATEGORIES: readonly string[] = [...PLACE_CATEGORIES, ...ITEM_CATEGORIES];
+export const DELIVERY_CATEGORIES: readonly string[] = DELIVERY_CATEGORY_GROUPS.flatMap(
+  (g) => g.items
+);
+export const CATEGORIES: readonly string[] = [
+  ...PLACE_CATEGORIES,
+  ...DELIVERY_CATEGORIES,
+  ...ITEM_CATEGORIES,
+];
 
 /**
  * 광역시·도 단위. 서울 상권(성수·홍대…)으로 끊었더니 지방을 담을 자리가 없었다.

@@ -7,7 +7,13 @@
  */
 // node --test 가 확장자 없는 상대 경로를 못 찾는다. tsconfig 에 allowImportingTsExtensions 가
 // 켜져 있어 .ts 를 명시해도 타입체크·번들 모두 문제없다.
-import { ITEM_CATEGORIES, PLACE_CATEGORIES, REGIONS, type Kind } from './taxonomy.ts';
+import {
+  ITEM_CATEGORIES,
+  PLACE_CATEGORIES,
+  DELIVERY_CATEGORIES,
+  REGIONS,
+  type Kind,
+} from './taxonomy.ts';
 
 /** 캡션에서 장소명을 뽑는 마커. 인스타 게시물이 위치를 적을 때 거의 이 기호를 쓴다. */
 const NAME_MARKERS = ['📍', '📌', '🏠', '🏡', '🍽', '☕'];
@@ -62,6 +68,24 @@ const ITEM_CATEGORY_RULES: readonly Rule[] = [
   { value: '식품', keywords: ['밀키트', '간식 추천', '원두', '차 추천', '영양제'] },
 ];
 
+/** 배달 음식 종류 추측 규칙. */
+const DELIVERY_CATEGORY_RULES: readonly Rule[] = [
+  { value: '치킨', keywords: ['치킨', '닭강정', '후라이드', '양념치킨'] },
+  { value: '피자', keywords: ['피자'] },
+  { value: '버거', keywords: ['버거', '햄버거'] },
+  { value: '중식', keywords: ['짜장', '짬뽕', '탕수육', '중국집', '마라'] },
+  { value: '일식', keywords: ['초밥', '스시', '돈카츠', '돈까스', '규동', '우동'] },
+  { value: '분식', keywords: ['떡볶이', '순대', '김밥', '튀김', '분식'] },
+  { value: '고기', keywords: ['족발', '보쌈', '삼겹', '갈비', '곱창'] },
+  { value: '찜·탕', keywords: ['찜닭', '아구찜', '감자탕', '전골', '해장국'] },
+  { value: '샐러드', keywords: ['샐러드', '포케', '다이어트 도시락'] },
+  { value: '디저트', keywords: ['케이크', '마카롱', '도넛', '빙수'] },
+  { value: '카페', keywords: ['커피', '라떼', '음료'] },
+  { value: '야식', keywords: ['야식', '새벽배달'] },
+  { value: '양식', keywords: ['파스타', '스테이크', '리조또'] },
+  { value: '한식', keywords: ['백반', '한식', '국밥', '비빔밥', '찌개'] },
+];
+
 /**
  * 지역 추측 규칙. 시·도 이름이 그대로 나오는 경우는 드물어서
  * 대표 지명을 같이 본다. 여기 없는 동네는 그냥 비워둔다.
@@ -104,21 +128,44 @@ function firstMatch(text: string, rules: readonly Rule[], allowed: readonly stri
 }
 
 /**
- * 장소 이야기인지 물건 이야기인지 추측한다.
+ * 배달 게시물을 알아보는 말. 배달앱 이름이나 "시켜 먹는" 표현이 근거다.
+ * "맛집"만으로는 가는 곳인지 시키는 곳인지 알 수 없어서 넣지 않았다.
+ */
+const DELIVERY_WORDS = [
+  '배달',
+  '배민',
+  '배달의민족',
+  '쿠팡이츠',
+  '요기요',
+  '땡겨요',
+  '시켜먹',
+  '시켜 먹',
+  '집에서',
+  '야식',
+  '포장주문',
+];
+
+/**
+ * 장소·배달·물건 중 무엇인지 추측한다.
  * 물건 키워드가 하나라도 잡히면 물건으로 본다. 향수·의류 소개 게시물이
  * "가고 싶은 곳" 목록에 들어가면 목록이 망가진다.
+ * 그다음 배달을 본다 — 배달은 장소의 한 갈래라 장소보다 먼저 걸러야 한다.
  */
 export function guessKind(caption: string | null | undefined): Kind {
   if (!caption) return 'place';
-  return firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES) ? 'item' : 'place';
+  if (firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES)) return 'item';
+  const haystack = caption.toLowerCase();
+  if (DELIVERY_WORDS.some((w) => haystack.includes(w))) return 'delivery';
+  return 'place';
 }
 
 /** 캡션에서 종류를 추측한다. 못 찾으면 빈 문자열. */
 export function guessCategory(caption: string | null | undefined, kind: Kind = 'place'): string {
   if (!caption) return '';
-  return kind === 'item'
-    ? firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES)
-    : firstMatch(caption, CATEGORY_RULES, PLACE_CATEGORIES);
+  if (kind === 'item') return firstMatch(caption, ITEM_CATEGORY_RULES, ITEM_CATEGORIES);
+  // 배달 분류는 음식 종류라 장소 규칙과 겹치지 않는다. 못 찾으면 비워둔다.
+  if (kind === 'delivery') return firstMatch(caption, DELIVERY_CATEGORY_RULES, DELIVERY_CATEGORIES);
+  return firstMatch(caption, CATEGORY_RULES, PLACE_CATEGORIES);
 }
 
 /** 캡션에서 지역을 추측한다. 못 찾으면 빈 문자열. */

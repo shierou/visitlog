@@ -27,9 +27,9 @@ export default async function InstagramInbox() {
     <>
       <header className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 backdrop-blur dark:border-neutral-800 dark:bg-neutral-900/90">
         <div className="px-4 pb-3 pt-5">
-          <h1 className="text-xl font-bold">Instagram 수집함</h1>
+          <h1 className="text-xl font-bold">분류해주세요</h1>
           <p className="mt-0.5 text-xs text-neutral-500">
-            DM으로 공유한 게시물 {items.length}개
+            DM으로 들어온 것 {items.length}개 · 가고 싶은 곳 / 배달 / 사고 싶어요로 나눠주세요
           </p>
         </div>
 
@@ -46,8 +46,8 @@ export default async function InstagramInbox() {
           >
             다녀온 곳 {visitedCount}
           </Link>
-          <span className="rounded-t-lg border-b-2 border-neutral-900 px-3 py-2 text-sm font-medium text-neutral-900 dark:border-white dark:text-white">
-            Instagram {items.length}
+          <span className="rounded-t-lg border-b-2 border-neutral-900 px-3 py-2 text-sm font-medium whitespace-nowrap text-neutral-900 dark:border-white dark:text-white">
+            분류해주세요 {items.length}
           </span>
         </nav>
       </header>
@@ -108,7 +108,7 @@ export default async function InstagramInbox() {
 
         {items.length === 0 && (
           <div className="py-20 text-center">
-            <p className="text-sm text-neutral-400">아직 수집된 Instagram 게시물이 없어요.</p>
+            <p className="text-sm text-neutral-400">분류할 게 없어요.</p>
             <p className="mt-2 text-xs text-neutral-400">
               다른 계정에서 수집용 계정으로 게시물이나 릴스를 DM으로 공유해보세요.
             </p>

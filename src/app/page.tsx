@@ -23,17 +23,18 @@ export default async function Home({
     await searchParams;
 
   // 탭 하나가 kind + status 조합을 정한다.
-  //   wishlist 가고 싶은 곳 | visited 다녀온 곳 | items 사고 싶은 것(산 것 포함)
-  const kind = tab === 'items' ? 'item' : 'place';
+  //   wishlist 가고 싶은 곳 | visited 다녀온 곳
+  //   delivery 배달하고 싶은 곳(시켜본 곳 포함) | items 사고 싶은 것(산 것 포함)
+  const kind = tab === 'items' ? 'item' : tab === 'delivery' ? 'delivery' : 'place';
   const meta = kindMeta(kind);
 
   const places = await db.place.findMany({
     where: {
       ownerId: CURRENT_OWNER,
       kind,
-      // 물건은 산 것까지 한 탭에 두고 목록 안에서 구분한다.
-      // 탭을 넷으로 늘리면 폰 가로폭에서 넘친다.
-      ...(kind === 'item' ? {} : { status: tab === 'visited' ? 'visited' : 'wishlist' }),
+      // 물건·배달은 끝낸 것까지 한 탭에 두고 목록 안에서 구분한다.
+      // 상태별로 탭을 또 쪼개면 폰 가로폭에서 넘친다.
+      ...(kind === 'place' ? { status: tab === 'visited' ? 'visited' : 'wishlist' } : {}),
       ...(q ? { name: { contains: q } } : {}),
       ...(region ? { region } : {}),
       ...(category ? { category } : {}),
@@ -48,13 +49,15 @@ export default async function Home({
     orderBy:
       tab === 'visited'
         ? [{ updatedAt: 'desc' }]
-        : // 물건 탭에서는 산 것을 아래로 내린다. 'visited' < 'wishlist' 라 asc 면 산 것이 먼저이므로 desc.
+        : // 물건·배달 탭에서는 끝낸 것을 아래로 내린다.
+          // 'visited' < 'wishlist' 라 asc 면 끝낸 것이 먼저이므로 desc.
           [{ status: 'desc' }, { priority: 'desc' }, { createdAt: 'desc' }],
   });
 
-  const [wishCount, visitedCount, itemCount, instagramCount] = await Promise.all([
+  const [wishCount, visitedCount, deliveryCount, itemCount, inboxCount] = await Promise.all([
     db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'place', status: 'wishlist' } }),
     db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'place', status: 'visited' } }),
+    db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'delivery', status: 'wishlist' } }),
     db.place.count({ where: { ownerId: CURRENT_OWNER, kind: 'item', status: 'wishlist' } }),
     db.instagramImport.count({ where: { ownerId: CURRENT_OWNER, status: 'pending' } }),
   ]);
@@ -99,15 +102,16 @@ export default async function Home({
         <div className="px-4 pb-3 pt-5">
           <h1 className="text-xl font-bold">다녀왔어요</h1>
           <p className="mt-0.5 text-xs text-neutral-500">
-            가고 싶은 곳 {wishCount} · 다녀온 곳 {visitedCount} · 사고 싶은 것 {itemCount}
+            가고 싶은 곳 {wishCount} · 배달 {deliveryCount} · 사고 싶은 것 {itemCount}
           </p>
         </div>
 
-        <nav className="flex gap-1 px-3">
+        <nav className="flex gap-1 overflow-x-auto px-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {[
             { key: 'wishlist', label: `가고 싶은 곳 ${wishCount}` },
             { key: 'visited', label: `다녀온 곳 ${visitedCount}` },
-            { key: 'items', label: `사고 싶은 것 ${itemCount}` },
+            { key: 'delivery', label: `배달하고 싶은 곳 ${deliveryCount}` },
+            { key: 'items', label: `사고 싶어요 ${itemCount}` },
           ].map((t) => (
             <Link
               key={t.key}
@@ -118,7 +122,7 @@ export default async function Home({
                 ...(priority && { priority }),
                 tab: t.key,
               })}`}
-              className={`rounded-t-lg px-3 py-2 text-sm font-medium ${
+              className={`shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium whitespace-nowrap ${
                 tab === t.key
                   ? 'border-b-2 border-neutral-900 text-neutral-900 dark:border-white dark:text-white'
                   : 'text-neutral-400'
@@ -129,9 +133,9 @@ export default async function Home({
           ))}
           <Link
             href="/instagram"
-            className="rounded-t-lg px-3 py-2 text-sm font-medium text-neutral-400"
+            className="shrink-0 rounded-t-lg px-3 py-2 text-sm font-medium whitespace-nowrap text-neutral-400"
           >
-            Instagram {instagramCount}
+            분류해주세요 {inboxCount}
           </Link>
         </nav>
       </header>

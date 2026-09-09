@@ -1,19 +1,19 @@
 'use client';
 
-import { categoryGroups, REGION_GROUPS, PRIORITIES, KINDS } from '@/lib/taxonomy';
+import { categoryGroups, REGION_GROUPS, PRIORITIES, KINDS, type Kind } from '@/lib/taxonomy';
 
 const CHIP_ON = 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900';
 const CHIP_OFF = 'bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400';
 const SELECT =
   'mt-1.5 w-full appearance-none rounded-xl bg-neutral-100 px-4 py-3 text-sm outline-none dark:bg-neutral-800';
 
-/** 장소냐 물건이냐. 이 선택에 따라 아래 종류 칩과 지역 표시가 갈린다. */
+/** 가는 곳이냐 시켜 먹는 곳이냐 사는 것이냐. 아래 종류 칩과 지역 표시가 여기서 갈린다. */
 export function KindTabs({
   value,
   onChange,
 }: {
   value: string;
-  onChange: (v: 'place' | 'item') => void;
+  onChange: (v: Kind) => void;
 }) {
   return (
     <div className="flex gap-1.5">
@@ -22,7 +22,7 @@ export function KindTabs({
           key={k.value}
           type="button"
           onClick={() => onChange(k.value)}
-          className={`flex-1 rounded-xl px-3 py-2.5 text-sm ${
+          className={`flex-1 rounded-xl px-2 py-2.5 text-sm whitespace-nowrap ${
             value === k.value ? CHIP_ON : CHIP_OFF
           }`}
         >

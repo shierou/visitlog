@@ -15,8 +15,8 @@ export type VisionExtract = {
   brand: string | null;
   /** 핵심 정보 한두 줄 (향 노트, 평점, 가격, 위치 등) */
   memo: string | null;
-  /** 가는 곳인가 사는 것인가. 향수든 맛집이든 같은 흐름으로 처리하기 위한 값 */
-  kind: 'place' | 'item' | null;
+  /** 가는 곳인가 시켜 먹는 곳인가 사는 것인가. 향수든 맛집이든 같은 흐름으로 처리한다 */
+  kind: 'place' | 'item' | 'delivery' | null;
   /** taxonomy 의 분류 이름. 목록에 없는 값이면 호출부가 버린다 */
   category: string | null;
 };
@@ -28,7 +28,7 @@ export type VisionExtract = {
  * 분류도 그 종류 안에서 가장 많이 나온 것을 쓴다. 한 장이 튀어도 흔들리지 않는다.
  */
 export function summarize(extracts: VisionExtract[]): {
-  kind: 'place' | 'item' | null;
+  kind: 'place' | 'item' | 'delivery' | null;
   category: string | null;
 } {
   const found = extracts.filter((e) => e.found);
