@@ -352,3 +352,11 @@ test('guesses delivery food categories', () => {
   assert.equal(guessCategory('족발 보쌈 야식', 'delivery'), '고기');
   assert.equal(guessCategory('아무 말', 'delivery'), '');
 });
+
+// 캡션 첫 줄이 주소인 게시물이 흔하다. 그게 가게 이름이 되면 안 된다.
+test('does not take an address or link as the name', () => {
+  assert.equal(guessName('서울 성동구 연무장길 25\n분위기 좋은 카페'), '분위기 좋은 카페');
+  assert.equal(guessName('https://www.instagram.com/p/ABC/\n연남동 소금빵'), '연남동 소금빵');
+  // 번지 없는 동네 이름이 섞인 상호는 그대로 쓴다
+  assert.equal(guessName('연남동 소금빵 맛집'), '연남동 소금빵 맛집');
+});

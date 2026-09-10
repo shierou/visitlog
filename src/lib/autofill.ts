@@ -190,7 +190,10 @@ const MAX_NAME = 40;
 
 function isNoise(text: string): boolean {
   const bare = text.replace(/[\s•·|,/]/gu, '');
-  return NOISE_WORDS.some((w) => bare === w || bare === w + w) || bare.length < 2;
+  if (NOISE_WORDS.some((w) => bare === w || bare === w + w) || bare.length < 2) return true;
+  // 주소나 링크는 가게 이름이 아니다. 캡션 첫 줄이 주소인 게시물이 흔해서 막는다.
+  if (/^https?:\/\//iu.test(text)) return true;
+  return /(?:시|도|구|군|읍|면|동)\s*\S*\s*(?:로|길|대로)\s*\d/u.test(text);
 }
 
 function tidy(text: string): string {
@@ -240,17 +243,20 @@ export function guessName(caption: string | null | undefined): string {
     if (candidate.length >= 2 && !isNoise(candidate)) return clamp(candidate);
   }
 
-  // 3) 첫 줄. "(저장•공유)" 같은 말머리와 괄호 부연을 걷어내고 첫 문장만 쓴다.
-  const firstLine = caption.split('\n').find((line) => tidy(line).length >= 2);
-  if (!firstLine) return '';
+  // 3) 윗줄부터. "(저장•공유)" 같은 말머리와 괄호 부연을 걷어내고 첫 문장만 쓴다.
+  //    첫 줄이 주소나 링크면 건너뛰고 다음 줄을 본다 — 주소를 맨 위에 적는
+  //    가게 소개가 흔한데, 거기서 포기하면 이름이 통째로 비어버린다.
+  for (const line of caption.split('\n')) {
+    if (tidy(line).length < 2) continue;
 
-  const stripped = firstLine
-    .replace(/^\s*[([{（【[][^)\]}）】]{0,12}[)\]}）】]\s*/u, '')
-    .replace(/\([^)]*\)/gu, '');
-  const sentence = tidy(stripped).split(/[.!?…]+/u)[0];
-  const candidate = tidy(sentence);
+    const stripped = line
+      .replace(/^\s*[([{（【[][^)\]}）】]{0,12}[)\]}）】]\s*/u, '')
+      .replace(/\([^)]*\)/gu, '');
+    const candidate = tidy(tidy(stripped).split(/[.!?…]+/u)[0]);
+    if (candidate.length >= 2 && !isNoise(candidate)) return clamp(candidate);
+  }
 
-  return candidate.length >= 2 && !isNoise(candidate) ? clamp(candidate) : '';
+  return '';
 }
 
 /* ── 여러 개가 한 게시물에 담긴 경우 ──────────────────────────── */

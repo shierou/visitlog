@@ -55,6 +55,17 @@ export function summarize(extracts: VisionExtract[]): {
 const HANDLE_LIKE = /^[a-z0-9._]{2,30}$/i;
 
 /**
+ * 이름 자리에 올 수 없는 값. 주소나 주소 조각이 가게 이름으로 들어오면
+ * 목록이 "서울 성동구 …" 로 채워져 무엇인지 알아볼 수 없게 된다.
+ */
+function looksLikeAddress(text: string): boolean {
+  if (/^https?:\/\//iu.test(text)) return true;
+  // "○○구 ○○로 12" 처럼 행정구역 + 도로/지번 + 번지가 모두 있으면 주소로 본다.
+  // "연남동 소금빵" 같은 상호는 번지가 없어서 걸리지 않는다.
+  return /(?:시|도|구|군|읍|면|동)\s*\S*\s*(?:로|길|대로)\s*\d/u.test(text);
+}
+
+/**
  * 추출 결과를 줄에 반영한다. 사용자가 이미 적은 값은 절대 덮지 않는다 —
  * 자동 채움이 손으로 고친 것을 지우면 기능을 끄고 싶어진다.
  * 예외는 핸들 꼴 자리표시자 이름뿐이다.
@@ -68,12 +79,14 @@ export function applyExtract(
   const patch: { name?: string; memo?: string } = {};
 
   if (!current.name.trim() || HANDLE_LIKE.test(current.name.trim())) {
-    // "브랜드 제품명" 꼴. 둘 중 하나만 있어도 그걸 쓴다.
-    const name = [extracted.brand, extracted.name]
+    // 브랜드는 물건에만 붙인다. 가게 이름 앞에 브랜드를 얹을 일은 없다.
+    const parts = extracted.kind === 'item' ? [extracted.brand, extracted.name] : [extracted.name];
+    const name = parts
       .map((v) => v?.trim())
       .filter(Boolean)
       .join(' ');
-    if (name) patch.name = name;
+    // 주소가 이름 자리에 들어오면 목록에서 무엇인지 알아볼 수 없다. 차라리 비워둔다.
+    if (name && !looksLikeAddress(name)) patch.name = name;
   }
 
   if (!current.memo.trim() && extracted.memo?.trim()) {

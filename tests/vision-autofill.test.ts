@@ -16,7 +16,7 @@ const ex = (partial: Partial<VisionExtract>): VisionExtract => ({
 test('fills empty name and memo from an extracted slide', () => {
   const patch = applyExtract(
     { name: '', memo: '' },
-    ex({ found: true, name: '앰브레트9', brand: '르라보', memo: '머스크 계열 · 50ml 24만원' })
+    ex({ kind: 'item', name: '앰브레트9', brand: '르라보', memo: '머스크 계열 · 50ml 24만원' })
   );
   assert.deepEqual(patch, { name: '르라보 앰브레트9', memo: '머스크 계열 · 50ml 24만원' });
 });
@@ -43,7 +43,7 @@ test('never overwrites what the user already typed', () => {
 test('replaces handle-like placeholder names with the extracted product', () => {
   const patch = applyExtract(
     { name: 'jomalonelondon', memo: '' },
-    ex({ found: true, name: '우드세이지 앤 씨 솔트', brand: '조 말론 런던', memo: '아로마틱 · 쏠티' })
+    ex({ kind: 'item', name: '우드세이지 앤 씨 솔트', brand: '조 말론 런던', memo: '아로마틱 · 쏠티' })
   );
   assert.deepEqual(patch, { name: '조 말론 런던 우드세이지 앤 씨 솔트', memo: '아로마틱 · 쏠티' });
 
@@ -66,12 +66,45 @@ test('does nothing for cover or outro slides', () => {
 
 test('uses whichever of brand and name is present', () => {
   assert.deepEqual(
-    applyExtract({ name: '', memo: '' }, ex({ found: true, name: null, brand: '딥티크', memo: null })),
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'item', name: null, brand: '딥티크' })),
     { name: '딥티크' }
   );
   assert.deepEqual(
-    applyExtract({ name: '', memo: '' }, ex({ found: true, name: '성수 베라짜뮤', brand: null, memo: null })),
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'place', name: '성수 베라짜뮤' })),
     { name: '성수 베라짜뮤' }
+  );
+});
+
+// 가게 카드에는 상호명보다 주소가 더 크게 박혀 있는 일이 잦다. 그게 이름으로
+// 들어오면 목록이 "서울 성동구 …" 로 채워져 무엇인지 알아볼 수 없다.
+test('never puts an address or link in the name', () => {
+  assert.deepEqual(
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'place', name: '서울 성동구 연무장길 25' })),
+    {}
+  );
+  assert.deepEqual(
+    applyExtract(
+      { name: '', memo: '' },
+      ex({ kind: 'place', name: 'https://www.instagram.com/p/ABC/' })
+    ),
+    {}
+  );
+  // 번지 없는 동네 이름이 섞인 상호는 멀쩡히 통과해야 한다
+  assert.deepEqual(
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'place', name: '연남동 소금빵' })),
+    { name: '연남동 소금빵' }
+  );
+});
+
+// 장소·배달에는 브랜드가 없다. 이름 앞에 뭔가 얹히면 안 된다.
+test('does not prepend a brand to place or delivery names', () => {
+  assert.deepEqual(
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'place', name: '베라짜뮤', brand: '엉뚱한값' })),
+    { name: '베라짜뮤' }
+  );
+  assert.deepEqual(
+    applyExtract({ name: '', memo: '' }, ex({ kind: 'delivery', name: '교촌치킨', brand: 'x' })),
+    { name: '교촌치킨' }
   );
 });
 

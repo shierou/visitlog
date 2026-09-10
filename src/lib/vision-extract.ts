@@ -101,10 +101,15 @@ export async function extractFromImage(source: ImageSource): Promise<VisionExtra
   // 종류를 미리 정해주지 않는다. 향수 모음이든 맛집 모음이든 같은 흐름으로 쓰려면
   // 이미지를 보고 판단하는 쪽이 맞다.
   const guide =
-    '가는 곳(맛집·카페·전시 등)이면 kind 를 place, name 에 상호명, brand 는 빈 문자열로 둔다. ' +
+    '가는 곳(맛집·카페·전시 등)이면 kind 를 place, brand 는 빈 문자열로 둔다. ' +
     '시켜 먹는 곳(배달 전문점, 배달앱 맛집)이면 kind 를 delivery 로 한다. ' +
     '가게에 가서 먹는 곳이면 delivery 가 아니라 place 다. ' +
     '사는 것(향수·의류·화장품 등)이면 kind 를 item, brand 에 브랜드명, name 에 제품명을 적는다. ' +
+    // 가게 카드에는 상호명보다 주소·전화번호가 더 크게 박혀 있는 일이 잦다.
+    // 그대로 옮겨 적으면 목록이 주소로 채워지므로 못 박아둔다.
+    'name 에는 반드시 가게 이름(상호)이나 제품 이름만 적는다. ' +
+    '주소·도로명·지번·전화번호·영업시간·인스타 주소는 name 이 아니라 memo 로 보낸다. ' +
+    '가게 이름을 못 찾으면 name 을 빈 값으로 두고 지어내지 않는다. ' +
     `category 는 kind 가 place 면 [${PLACE_CATEGORIES.join(', ')}] 중에서, ` +
     `delivery 면 [${DELIVERY_CATEGORIES.join(', ')}] 중에서, ` +
     `item 이면 [${ITEM_CATEGORIES.join(', ')}] 중에서 하나를 그대로 골라 적는다. ` +
