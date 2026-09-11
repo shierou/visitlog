@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { db, CURRENT_OWNER } from '@/lib/db';
 import { publicUrl } from '@/lib/storage';
 import { fmtDate, daysBetween, REVISIT_LABEL } from '@/lib/format';
-import { priorityMeta, normalizePriority, kindMeta } from '@/lib/taxonomy';
+import { priorityMeta, normalizePriority, kindMeta, regionScope } from '@/lib/taxonomy';
 import PlaceFilters from '@/components/PlaceFilters';
 import PlaceList, { type PlaceCard } from '@/components/PlaceList';
 
@@ -36,7 +36,8 @@ export default async function Home({
       // 상태별로 탭을 또 쪼개면 폰 가로폭에서 넘친다.
       ...(kind === 'place' ? { status: tab === 'visited' ? 'visited' : 'wishlist' } : {}),
       ...(q ? { name: { contains: q } } : {}),
-      ...(region ? { region } : {}),
+      // 넓은 지역을 고르면 그 안의 권역까지 함께 본다.
+      ...(region ? { region: { in: [...regionScope(region)] } } : {}),
       ...(category ? { category } : {}),
       ...(priority ? { priority: normalizePriority(priority) } : {}),
     },

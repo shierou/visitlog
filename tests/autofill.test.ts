@@ -61,11 +61,21 @@ test('종류는 좁은 규칙이 먼저 이긴다', () => {
 });
 
 test('지역은 대표 지명으로도 잡는다', () => {
-  assert.equal(guessRegion('성수동 카페 투어'), '서울');
   assert.equal(guessRegion('제주 애월 카페'), '제주');
-  assert.equal(guessRegion('파주 감악산 출렁다리'), '경기');
   assert.equal(guessRegion('해운대 앞바다'), '부산');
   assert.equal(guessRegion('어디인지 안 나옴'), '');
+});
+
+// 수도권은 "서울" 한 칸으로 두면 쓸모가 없다. 동네를 알면 권역까지 집어준다.
+test('수도권은 권역까지 좁혀서 잡는다', () => {
+  assert.equal(guessRegion('성수동 카페 투어'), '성수·서울숲');
+  assert.equal(guessRegion('연남동 소금빵 맛집'), '홍대·연남');
+  assert.equal(guessRegion('가로수길 브런치'), '신사·압구정');
+  assert.equal(guessRegion('판교 점심 맛집'), '성남·판교');
+  assert.equal(guessRegion('파주 감악산 출렁다리'), '파주');
+
+  // 동네를 모르면 넓은 값으로 남는다 — 틀린 권역을 찍는 것보다 낫다
+  assert.equal(guessRegion('서울 어딘가 맛집'), '서울');
 });
 
 test('지역명이 겹치면 서울보다 다른 지역을 먼저 본다', () => {

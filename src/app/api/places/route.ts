@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db, CURRENT_OWNER } from '@/lib/db';
-import { normalizePriority, normalizeKind } from '@/lib/taxonomy';
+import { normalizePriority, normalizeKind, regionScope } from '@/lib/taxonomy';
 import {
   fetchInstagramThumbnail,
   canFetchThumbnail,
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
       ownerId: CURRENT_OWNER,
       ...(status ? { status } : {}),
       ...(kind ? { kind } : {}),
-      ...(region ? { region } : {}),
+      ...(region ? { region: { in: [...regionScope(region)] } } : {}),
       ...(category ? { category } : {}),
       ...(priority ? { priority: normalizePriority(priority) } : {}),
       ...(q ? { OR: [{ name: { contains: q } }, { memo: { contains: q } }] } : {}),

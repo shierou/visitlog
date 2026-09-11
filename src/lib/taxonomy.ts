@@ -111,8 +111,53 @@ export const CATEGORIES: readonly string[] = [
  * 여행지가 섞이는 목록이라 전국을 같은 층위로 두는 쪽이 맞다.
  * 더 좁은 위치는 메모나 주소에 적는다.
  */
+/**
+ * 수도권은 한 덩어리로 두면 쓸모가 없다. "서울" 13 건이 다 같은 칸에 있으면
+ * 오늘 홍대에 있는 내가 무엇을 갈 수 있는지 알 수 없다. 그래서 상권으로 나눈다.
+ * 행정구역이 아니라 "여기 간 김에 들를 수 있나" 기준이다.
+ */
+export const SEOUL_NORTH_AREAS: readonly string[] = [
+  '홍대·연남',
+  '합정·망원',
+  '신촌·이대',
+  '연희·서대문',
+  '종로·북촌',
+  '을지로·명동',
+  '이태원·한남',
+  '성수·서울숲',
+  '건대·왕십리',
+];
+
+export const SEOUL_SOUTH_AREAS: readonly string[] = [
+  '강남·역삼',
+  '신사·압구정',
+  '청담·삼성',
+  '서초·방배',
+  '잠실·송파',
+  '여의도·영등포',
+  '목동·양천',
+  '관악·사당',
+];
+
+export const SEOUL_AREAS: readonly string[] = [...SEOUL_NORTH_AREAS, ...SEOUL_SOUTH_AREAS];
+
+export const GYEONGGI_AREAS: readonly string[] = [
+  '성남·판교',
+  '수원·용인',
+  '고양·일산',
+  '부천·광명',
+  '안양·과천',
+  '남양주·구리',
+  '파주',
+  '가평·양평',
+];
+
 export const REGION_GROUPS: readonly Group[] = [
-  { label: '수도권', items: ['서울', '인천', '경기'] },
+  { label: '서울 강북', items: SEOUL_NORTH_AREAS },
+  { label: '서울 강남', items: SEOUL_SOUTH_AREAS },
+  { label: '경기·인천', items: GYEONGGI_AREAS },
+  // 어디인지 모를 때, 그리고 예전에 넓게 저장해둔 것들을 위해 남긴다.
+  { label: '수도권 전체', items: ['서울', '경기', '인천'] },
   { label: '강원·충청', items: ['강원', '대전', '세종', '충북', '충남'] },
   { label: '전라', items: ['광주', '전북', '전남'] },
   { label: '경상', items: ['부산', '대구', '울산', '경북', '경남'] },
@@ -120,6 +165,19 @@ export const REGION_GROUPS: readonly Group[] = [
 ];
 
 export const REGIONS: readonly string[] = REGION_GROUPS.flatMap((g) => g.items);
+
+/**
+ * 넓은 지역을 고르면 그 안의 권역까지 함께 본다.
+ *
+ * 지역은 저장된 문자열로 정확히 비교하는데, 세분화 전에 "서울" 로만 저장해둔
+ * 것들이 있다. 이 함수가 없으면 "서울" 을 골라도 "성수·서울숲" 항목이 안 나오고,
+ * 반대로 예전 항목들이 어느 권역에도 안 잡혀 통째로 사라진다.
+ */
+export function regionScope(region: string): readonly string[] {
+  if (region === '서울') return [region, ...SEOUL_AREAS];
+  if (region === '경기') return [region, ...GYEONGGI_AREAS];
+  return [region];
+}
 
 /**
  * 우선순위는 정렬에 쓰므로 문자열이 아니라 정수다. 높을수록 먼저 나온다.
