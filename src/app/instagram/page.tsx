@@ -89,6 +89,13 @@ export default async function InstagramInbox() {
           );
         })}
 
+        {/* 가장 확실한 길. Meta 가 캐러셀 공유에는 게시물 주소를 안 주지만,
+            본문에 적힌 주소는 그대로 넘겨준다. */}
+        <p className="px-1 pt-1 text-xs text-neutral-400">
+          공유할 때 메시지 칸에 게시물 링크를 함께 붙여넣으면, 사진과 정보가 전부 자동으로
+          들어와요.
+        </p>
+
         {items.length === 0 && (
           <div className="py-20 text-center">
             <p className="text-sm text-neutral-400">분류할 게 없어요.</p>

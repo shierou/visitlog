@@ -249,3 +249,60 @@ test('bundles multiple attachment images into one import, in order', () => {
   ]);
   assert.equal(result[0]?.dedupeKey, 'https://lookaside.fbsbx.com/m/1');
 });
+
+// 가장 확실한 길: 공유할 때 메시지 칸에 게시물 링크를 함께 붙여넣기.
+// 그러면 첨부(표지)와 게시물 주소가 한 번에 들어와 손댈 것이 없어진다.
+test('takes the permalink from the message text when it is typed in', () => {
+  const [item] = extractInstagramSharedPosts({
+    object: 'instagram',
+    entry: [
+      {
+        id: 'collector-id',
+        messaging: [
+          {
+            timestamp: 1_725_432_100_000,
+            message: {
+              mid: 'typed-link',
+              text: 'https://www.instagram.com/smeller_news/p/Db0TzQAk0w9/',
+              attachments: [
+                {
+                  type: 'share',
+                  payload: { url: 'https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1' },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  // 사용자명이 붙은 형태로 보내도 표준형으로 저장된다
+  assert.equal(item?.sourceUrl, 'https://www.instagram.com/p/Db0TzQAk0w9/');
+  assert.deepEqual(item?.mediaUrls, ['https://lookaside.fbsbx.com/ig_messaging_cdn/?asset_id=1']);
+  // 주소뿐인 본문은 메모가 되지 않는다
+  assert.equal(item?.messageText, null);
+});
+
+test('keeps the caption when there are words besides the link', () => {
+  const [item] = extractInstagramSharedPosts({
+    object: 'instagram',
+    entry: [
+      {
+        id: 'collector-id',
+        messaging: [
+          {
+            timestamp: 1_725_432_100_000,
+            message: {
+              mid: 'link-with-words',
+              text: '여기 꼭 가보자 https://www.instagram.com/p/ABC123XYZ/',
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  assert.equal(item?.sourceUrl, 'https://www.instagram.com/p/ABC123XYZ/');
+  assert.equal(item?.messageText, '여기 꼭 가보자 https://www.instagram.com/p/ABC123XYZ/');
+});

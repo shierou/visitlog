@@ -66,6 +66,16 @@ function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
+/**
+ * 주소를 빼고 나면 남는 말이 있는가.
+ *
+ * 게시물 링크만 붙여넣어 보내는 방식이 가장 확실한데, 그때 본문이 그대로
+ * 메모가 되면 메모 칸이 주소로 채워진다. 주소뿐인 본문은 없는 것으로 본다.
+ */
+function hasWordsBesidesUrls(value: string): boolean {
+  return value.replace(URL_PATTERN, ' ').trim().length >= 2;
+}
+
 function extractUrls(value: string): string[] {
   return (value.match(URL_PATTERN) ?? []).map((url) =>
     url.replace(/&amp;/gi, '&').replace(/[),.;!?\]}]+$/u, '')
@@ -203,8 +213,10 @@ export function scanInstagramWebhook(payload: unknown): InstagramWebhookScan {
           : Date.now();
       const senderId = asString(asObject(event.sender)?.id);
       const recipientId = asString(asObject(event.recipient)?.id);
-      const messageText = asString(message.text)?.slice(0, 2000) ?? null;
-      const directCandidates = messageText ? extractUrls(messageText) : [];
+      const rawText = asString(message.text)?.slice(0, 2000) ?? null;
+      const directCandidates = rawText ? extractUrls(rawText) : [];
+      // 주소만 있는 본문은 메모로 쓰지 않는다. 링크는 sourceUrl 로 따로 간다.
+      const messageText = rawText && hasWordsBesidesUrls(rawText) ? rawText : null;
       const mediaCandidates: string[] = [];
       // 릴스 공유는 본문 없이 캡션(title)만 오는 일이 많아 메모 대용으로 쓴다.
       let attachmentTitle: string | null = null;
