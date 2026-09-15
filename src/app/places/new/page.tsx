@@ -312,7 +312,7 @@ function NewPlaceForm() {
             const res = await fetch('/api/vision-autofill', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ image }),
+              body: JSON.stringify({ image, caption: initialMemo }),
             });
             if (!res.ok) {
               firstError ||= (await res.json().catch(() => null))?.error ?? '읽기에 실패했어요';

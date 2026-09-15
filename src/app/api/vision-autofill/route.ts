@@ -19,7 +19,7 @@ export const maxDuration = 60;
  * 그려져 있어서 캡션에는 없다. 폼이 줄마다 이걸 불러 이름·메모·종류·분류
  * 초기값을 채운다. 초기값일 뿐이라 틀려도 고치면 된다.
  *
- * 요청: { image: { url } | { base64, mediaType } }
+ * 요청: { image: { url } | { base64, mediaType }, caption?: string }
  * 한 번에 한 장만 받는다 — Vercel 요청 본문 한도(4.5MB) 안에 안전하게 들어가고,
  * 폼이 줄마다 병렬로 부르면 전체 시간도 한 장 읽는 시간과 같다.
  */
@@ -53,7 +53,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: '이미지가 없거나 형식이 잘못됐어요' }, { status: 400 });
   }
 
-  const result = await extractFromImage(source);
+  // 캡션은 이미지에서 흐릿하게 읽은 상호를 맞춰보는 힌트로 쓴다.
+  const caption = typeof body?.caption === 'string' ? body.caption : null;
+  const result = await extractFromImage(source, caption);
   if ('error' in result) {
     // 사유를 감추면 무엇이 잘못됐는지 알 길이 없다. 본인만 쓰는 앱이라 그대로 보여준다.
     return NextResponse.json({ error: `이미지를 읽지 못했어요: ${result.error}` }, { status: 502 });

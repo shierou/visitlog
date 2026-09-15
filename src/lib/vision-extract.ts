@@ -91,8 +91,16 @@ export async function downloadInstagramImage(url: string): Promise<{ source: Ima
   }
 }
 
-/** 이미지 한 장 → 이름·정보·종류·분류. 실패하면 사유를 돌려준다. */
-export async function extractFromImage(source: ImageSource): Promise<VisionExtract | Failed> {
+/**
+ * 이미지 한 장 → 이름·정보·종류·분류. 실패하면 사유를 돌려준다.
+ *
+ * caption 은 게시물 캡션이다. 상호 목록이 캡션에 적혀 있는 게시물이 많아서,
+ * 이미지에서 흐릿하게 읽은 이름을 캡션과 맞춰보면 훨씬 정확해진다.
+ */
+export async function extractFromImage(
+  source: ImageSource,
+  caption?: string | null
+): Promise<VisionExtract | Failed> {
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
   if (!apiKey) {
     return { error: 'ANTHROPIC_API_KEY 가 설정되지 않았어요. Vercel 환경변수에 추가해주세요.' };
@@ -105,11 +113,16 @@ export async function extractFromImage(source: ImageSource): Promise<VisionExtra
     '시켜 먹는 곳(배달 전문점, 배달앱 맛집)이면 kind 를 delivery 로 한다. ' +
     '가게에 가서 먹는 곳이면 delivery 가 아니라 place 다. ' +
     '사는 것(향수·의류·화장품 등)이면 kind 를 item, brand 에 브랜드명, name 에 제품명을 적는다. ' +
-    // 가게 카드에는 상호명보다 주소·전화번호가 더 크게 박혀 있는 일이 잦다.
-    // 그대로 옮겨 적으면 목록이 주소로 채워지므로 못 박아둔다.
+    // 한국 큐레이션 슬라이드는 큰 글씨가 홍보 문구이고 진짜 상호는 아래쪽이나
+    // 구석에 작게 적혀 있는 구성이 대부분이다. 큰 글씨만 읽으면 이름을 놓친다.
     'name 에는 반드시 가게 이름(상호)이나 제품 이름만 적는다. ' +
+    '상호는 이미지 아래쪽이나 구석에 작게 적혀 있는 경우가 많으니 ' +
+    '가장 큰 글씨만 보지 말고 이미지 전체(위·아래·모서리)를 훑어서 찾는다. ' +
+    '"성수동 감성카페", "평점 4.0 이상", "이건 꼭 가봐야 해" 처럼 지역+업종이나 ' +
+    '홍보 문구는 이름이 아니다 — 그 가게만 가리키는 고유한 상호를 골라야 한다. ' +
     '주소·도로명·지번·전화번호·영업시간·인스타 주소는 name 이 아니라 memo 로 보낸다. ' +
-    '가게 이름을 못 찾으면 name 을 빈 값으로 두고 지어내지 않는다. ' +
+    '상호가 영문·한글로 함께 적혀 있으면 한글 쪽을 name 에 쓴다. ' +
+    '아무리 찾아도 상호가 없으면 name 을 빈 값으로 두고 지어내지 않는다. ' +
     `category 는 kind 가 place 면 [${PLACE_CATEGORIES.join(', ')}] 중에서, ` +
     `delivery 면 [${DELIVERY_CATEGORIES.join(', ')}] 중에서, ` +
     `item 이면 [${ITEM_CATEGORIES.join(', ')}] 중에서 하나를 그대로 골라 적는다. ` +
@@ -120,13 +133,15 @@ export async function extractFromImage(source: ImageSource): Promise<VisionExtra
     const response = await client.messages.parse({
       model: 'claude-opus-5',
       max_tokens: 8000,
-      // 글자 옮겨 적기에 가까운 일이라 낮은 effort 로 충분하고, 폼이 기다리는 시간이 줄어든다.
-      output_config: { effort: 'low', format: zodOutputFormat(ExtractSchema) },
+      // low 로는 아래쪽에 작게 적힌 상호를 놓치고 큰 홍보 문구를 이름으로 집어온다.
+      // 한 장에 몇 초 더 쓰더라도 이름을 제대로 읽는 쪽이 낫다.
+      output_config: { effort: 'medium', format: zodOutputFormat(ExtractSchema) },
       system:
         '인스타그램 큐레이션 게시물의 슬라이드 이미지 한 장에서 정보를 추출한다. ' +
         guide +
-        ' memo 에는 이미지에 적힌 핵심 정보(향 노트, 평점, 가격, 용량, 위치, 대표 메뉴 등)를 ' +
-        '한국어 한두 줄로 담는다. ' +
+        ' memo 에는 이 곳/이 제품이 어떤 곳인지 알 수 있는 설명을 한국어 한두 줄로 담는다. ' +
+        '이미지에 적힌 소개 문구, 대표 메뉴, 향 노트, 평점, 가격, 영업시간, 위치를 ' +
+        '읽히는 대로 옮긴다. 이름만 덩그러니 남기지 말 것. ' +
         '표지·아웃트로거나 소개 대상이 없으면 found 를 false 로 둔다. ' +
         '이미지에 없는 내용을 지어내지 않는다.',
       messages: [
@@ -134,7 +149,16 @@ export async function extractFromImage(source: ImageSource): Promise<VisionExtra
           role: 'user',
           content: [
             { type: 'image', source },
-            { type: 'text', text: '이 슬라이드에서 정보를 추출해줘.' },
+            {
+              type: 'text',
+              text: caption?.trim()
+                ? '이 슬라이드에서 정보를 추출해줘.\n\n' +
+                  '아래는 이 게시물의 캡션이야. 이미지에서 읽은 상호가 캡션에도 있으면 ' +
+                  '그 표기를 따르고, 캡션에만 있는 내용을 지어내지는 마.\n' +
+                  '---\n' +
+                  caption.trim().slice(0, 1500)
+                : '이 슬라이드에서 정보를 추출해줘.',
+            },
           ],
         },
       ],
