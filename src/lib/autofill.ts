@@ -285,6 +285,41 @@ export type SplitPlace = { name: string; memo: string };
 /** `- 조 말론` `• 딥티크` 처럼 번호 없이 나열하는 표기 */
 const BULLETS = ['-', '–', '—', '•', '·', '‣', '▪', '※', '✔', '✅', '☑', '▶'];
 
+/**
+ * 캡션이 실제로 쓰고 있는 기호를 찾아낸다.
+ *
+ * 한국 인스타 캡션은 `𖦹` `✧` `❍` 처럼 취향대로 고른 장식 기호를 항목 머리로
+ * 쓴다. 목록을 미리 못 박으면 매번 새 기호에 당하므로, 글자도 숫자도 아닌
+ * 기호가 줄머리에 두 번 이상 나오면 그걸 불릿으로 본다.
+ *
+ * 해시태그(#)와 멘션(@)은 뺀다. 둘은 캡션에서 뜻이 정해진 기호이고
+ * 각자 다루는 곳이 따로 있다 — 여기서 불릿으로 잡으면 그쪽을 가로챈다.
+ */
+// 본문에 쓰일 수 있는 글자. 이게 아니면 장식 기호로 본다.
+// `p{L}` 로 거르면 안 된다 — 𖦹(U+169B9) 같은 희귀 문자가 유니코드상 "문자" 라서
+// 정작 걸러내야 할 것이 아니라 잡아내야 할 것이 빠져나간다.
+const TEXT_HEAD = new RegExp(
+  String.raw`[\p{Script=Hangul}\p{Script=Han}\p{Script=Latin}\p{Script=Hiragana}\p{Script=Katakana}\p{N}\s]`,
+  'u'
+);
+
+function discoverBullets(caption: string): string[] {
+  const counts = new Map<string, number>();
+
+  for (const line of caption.split('\n')) {
+    const [head] = [...line.trimStart()];
+    if (!head || head === '#' || head === '@') continue;
+    // 본문 글자로 시작하면 항목 머리가 아니라 그냥 문장이다.
+    if (TEXT_HEAD.test(head)) continue;
+    counts.set(head, (counts.get(head) ?? 0) + 1);
+  }
+
+  return [...counts]
+    .filter(([, count]) => count >= 2)
+    .sort((a, b) => b[1] - a[1])
+    .map(([char]) => char);
+}
+
 /** "-우유망고 10,900원" 같은 가격 줄은 항목이 아니다. */
 function isPriceLike(text: string): boolean {
   return /^[\d.,\s]+(?:원|won|₩|\$)?$/iu.test(text) || /^\d[\d,.]*\s*(?:원|won|₩)$/iu.test(text);
@@ -367,7 +402,10 @@ function splitNumbered(caption: string): SplitPlace[] {
  * 번호 목록이 없을 때만 본다. 같은 기호가 두 번 이상 나와야 목록으로 친다.
  */
 function splitBulleted(caption: string): SplitPlace[] {
-  for (const bullet of BULLETS) {
+  // 미리 아는 기호를 먼저 보고, 없으면 캡션이 실제로 쓰는 기호를 찾아 쓴다.
+  const candidates = [...new Set([...BULLETS, ...discoverBullets(caption)])];
+
+  for (const bullet of candidates) {
     const items: Draft[] = [];
     let current: Draft | null = null;
 
